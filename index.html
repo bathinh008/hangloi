@@ -1,0 +1,2182 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý hàng lỗi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+	<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+    <!-- SheetJS for Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .modal-open { overflow: hidden; }
+        .animate-in { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: 600; }
+		@media (max-width: 768px) {
+			.desktop-table {
+				display: none;
+			}
+
+			.mobile-card-list {
+				display: block;
+			}
+
+			header .max-w-7xl {
+				height: auto;
+				padding-top: 10px;
+				padding-bottom: 10px;
+				flex-wrap: wrap;
+				gap: 8px;
+			}
+
+			header h1 {
+				font-size: 16px;
+			}
+
+			#connection-status {
+				font-size: 10px;
+			}
+		}
+
+		@media (min-width: 769px) {
+			.mobile-card-list {
+				display: none;
+			}
+		}
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen pb-20 md:pb-0">
+
+	<!--Đăng nhập-->
+	<div id="login-screen" class="fixed inset-0 bg-slate-100 z-[999] flex items-center justify-center">
+		<form onsubmit="event.preventDefault(); loginApp();"
+			class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
+			<h2 class="text-2xl font-bold mb-6 text-center">Đăng nhập</h2>
+
+			<select id="login-mode"
+				class="w-full mb-3 px-4 py-3 border rounded-xl outline-none">
+				<option value="app_user">Đăng nhập với quyền Nhân viên</option>
+				<option value="auth">Đăng nhập với quyền Quản trị viên</option>
+			</select>
+
+			<input id="login-user" type="text" placeholder="Email hoặc tài khoản"
+				class="w-full mb-3 px-4 py-3 border rounded-xl outline-none">
+
+			<input id="login-pass" type="password" placeholder="Mật khẩu"
+				class="w-full mb-4 px-4 py-3 border rounded-xl outline-none">
+
+			<button onclick="loginApp()"
+				class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">
+				Đăng nhập
+			</button>
+
+			<p id="login-error" class="hidden text-red-500 text-sm mt-3 text-center">
+				Sai tài khoản hoặc mật khẩu
+			</p>
+		</form>
+	</div>
+
+    <!-- Header -->
+    <header class="bg-white border-b sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="p-2 bg-blue-600 rounded-lg">
+                    <i class="fas fa-box text-white text-xl"></i>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight">Quản lý hàng lỗi</h1>
+            </div>
+            <nav class="hidden md:flex gap-8">
+				<button onclick="switchTab('dashboard')" id="tab-dashboard" class="py-5 px-1 tab-active transition-all">Báo cáo lỗi</button>
+				<button onclick="switchTab('history')" id="tab-history" class="py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">Lịch sử</button>
+				<button onclick="switchTab('catalog')" id="tab-catalog" class="admin-po-only py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">
+					Danh mục hàng hóa
+				</button>
+				<button onclick="switchTab('users')" 
+					id="tab-users"
+					class="admin-only py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">
+					
+					Quản lý tài khoản
+				</button>
+			</nav>
+			<div class="flex items-center gap-3">
+
+				<div class="hidden md:flex flex-col items-end">
+					<span class="text-sm text-slate-400">
+						Xin chào,
+					</span>
+
+					<span id="hello-user"
+						class="font-bold text-slate-700">
+						Người dùng
+					</span>
+				</div>
+
+				<button onclick="logoutApp()" 
+					class="text-sm bg-red-50 text-red-600 px-3 py-1 rounded-lg font-semibold">
+					Đăng xuất
+				</button>
+
+			</div>
+            <div id="connection-status" class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full flex items-center gap-2">
+                <span id="status-dot" class="w-2 h-2 rounded-full bg-yellow-400"></span> <span id="status-text">Đang kết nối Supabase...</span>
+            </div>
+        </div>
+    </header>
+
+	<!-- Mobile Bottom Nav -->
+	<nav id="mobile-bottom-nav"
+		class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] px-2 py-2 grid grid-cols-4 gap-1">
+
+		<button onclick="switchTab('dashboard')" id="m-tab-dashboard"
+			class="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-blue-600 bg-blue-50 font-semibold text-[11px]">
+			<i class="fas fa-clipboard-list text-lg"></i>
+			<span>Báo lỗi</span>
+		</button>
+
+		<button onclick="switchTab('history')" id="m-tab-history"
+			class="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
+			<i class="fas fa-clock-rotate-left text-lg"></i>
+			<span>Lịch sử</span>
+		</button>
+
+		<button onclick="switchTab('catalog')" id="m-tab-catalog"
+			class="admin-po-only flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
+			<i class="fas fa-boxes-stacked text-lg"></i>
+			<span>Danh mục</span>
+		</button>
+
+		<button onclick="switchTab('users')" id="m-tab-users"
+			class="admin-only flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
+			<i class="fas fa-users-gear text-lg"></i>
+			<span>Tài khoản</span>
+		</button>
+
+	</nav>
+
+    <!-- Dashboard View -->
+    <main id="view-dashboard" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Stats Dashboard -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
+            <div class="bg-white border border-slate-200 p-4 md:p-5 rounded-2xl shadow-sm">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-sm font-medium text-slate-500">Tổng số lỗi</span>
+                    <div class="p-2 rounded-lg text-blue-600 bg-blue-50"><i class="fas fa-chart-bar"></i></div>
+                </div>
+                <div id="stat-total" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-white border border-slate-200 p-4 md:p-5 rounded-2xl shadow-sm">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-sm font-medium text-slate-500">Chờ xử lý</span>
+                    <div class="p-2 rounded-lg text-yellow-600 bg-yellow-50"><i class="fas fa-clock"></i></div>
+                </div>
+                <div id="stat-pending" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-white border border-slate-200 p-4 md:p-5 rounded-2xl shadow-sm">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-sm font-medium text-slate-500">Đang sửa</span>
+                    <div class="p-2 rounded-lg text-orange-600 bg-orange-50"><i class="fas fa-exclamation-circle"></i></div>
+                </div>
+                <div id="stat-fixing" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-white border border-slate-200 p-4 md:p-5 rounded-2xl shadow-sm">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-sm font-medium text-slate-500">Đã xong</span>
+                    <div class="p-2 rounded-lg text-green-600 bg-green-50"><i class="fas fa-check-circle"></i></div>
+                </div>
+                <div id="stat-resolved" class="text-2xl font-bold">0</div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex flex-col md:flex-row gap-4 mb-6 justify-between items-center">
+            <div class="relative w-full md:w-96">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input 
+                    type="text" 
+                    id="search-input"
+                    placeholder="Tìm theo sản phẩm, ITEM hoặc nhà cung cấp..."
+                    class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                >
+            </div>
+            
+            <div class="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                <select 
+                    id="filter-status"
+                    class="bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                    onchange="renderDashboard()"
+                >
+                    <option value="All">Tất cả trạng thái</option>
+                    <option value="Pending">Chờ xử lý</option>
+                    <option value="Fixing">Đang sửa</option>
+                    <option value="Resolved">Đã hoàn thành</option>
+                </select>
+                <div class="grid grid-cols-2 md:flex gap-2">
+					<button onclick="downloadDefectSampleExcel()"
+						class="admin-po-only bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg flex items-center gap-2 border border-slate-200 transition-colors">
+						
+						<i class="fas fa-download text-blue-600"></i>
+						File mẫu
+					</button>
+
+					<button onclick="document.getElementById('defect-excel-input').click()"
+						class="admin-po-only bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-4 py-2 rounded-lg flex items-center gap-2 border border-emerald-200 transition-colors">
+
+						<i class="fas fa-file-import"></i>
+						Nhập Excel
+					</button>
+
+					<input type="file" id="defect-excel-input" class="hidden" accept=".xlsx, .xls">
+
+					<button onclick="exportDefectsToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+						<i class="fas fa-file-excel"></i> Xuất Excel
+					</button>
+
+					<button onclick="deleteAllDefects()" 
+						class="admin-only bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+						<i class="fas fa-trash-alt"></i>
+						Xóa tất cả
+					</button>
+
+					<button onclick="toggleModal('modal-defect', true)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+						<i class="fas fa-plus"></i> Báo lỗi mới
+					</button>
+				</div>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm desktop-table">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[800px]">
+                    <thead class="bg-slate-50 border-b border-slate-200">
+						<tr>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Thời gian</th> <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Thông tin sản phẩm lỗi</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên Nhà cung cấp</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mã Nhà cung cấp</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mô tả lỗi</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Kết quả</th> <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Xóa</th>
+						</tr>
+					</thead>
+                    <tbody id="defect-list" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+        </div>
+		<div id="defect-mobile-list" class="mobile-card-list space-y-3"></div>
+    </main>
+
+    <!-- Catalog View -->
+    <main id="view-catalog" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 hidden">
+        <div class="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6">
+
+			<!-- LEFT -->
+			<div class="w-full md:w-auto">
+
+				<h2 class="text-2xl font-bold">
+					Danh mục hàng hóa
+				</h2>
+
+				<div class="relative w-full md:w-96 mt-3">
+					<i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+
+					<input id="catalog-search" type="text"
+						placeholder="Tìm barcode, tên sản phẩm, ITEM, NCC..."
+						class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+				</div>
+
+			</div>
+
+			<!-- RIGHT -->
+			<div class="grid grid-cols-2 md:flex gap-2 w-full md:w-auto">
+
+				<button onclick="downloadSampleExcel()" 
+					class="admin-po-only bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl flex items-center gap-2 border border-slate-200 shadow-sm">
+
+					<i class="fas fa-download text-blue-600"></i>
+					Tải file mẫu
+				</button>
+
+				<button onclick="document.getElementById('excel-input').click()" 
+					class="admin-po-only bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl flex items-center gap-2 border border-slate-200 shadow-sm">
+
+					<i class="fas fa-file-excel text-green-600"></i>
+					Nhập từ Excel
+				</button>
+
+				<input type="file" id="excel-input" class="hidden" accept=".xlsx, .xls">
+
+				<button onclick="toggleModal('modal-catalog', true)" 
+					class="admin-po-only bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm">
+
+					<i class="fas fa-plus"></i>
+					Thêm thủ công
+				</button>
+
+			</div>
+
+		</div>
+        <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm desktop-table">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[800px]">
+                    <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                            <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mã vạch</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên sản phẩm</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Item</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên Nhà cung cấp</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mã Nhà cung cấp</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Xóa</th>
+                        </tr>
+                    </thead>
+                    <tbody id="catalog-list" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+        </div>
+		<div id="catalog-mobile-list" class="mobile-card-list space-y-3"></div>
+    </main>
+
+	<!-- History View -->
+	<main id="view-history" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 hidden">
+		<div class="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6">
+
+			<!-- LEFT -->
+			<div class="w-full md:w-auto">
+				<h2 class="text-2xl font-bold text-slate-800">
+					Lịch sử hàng lỗi đã xử lý
+				</h2>
+
+				<p class="text-sm text-slate-500 mt-1">
+					Chỉ hiển thị những hàng có kết quả: Xong
+				</p>
+			</div>
+
+			<!-- CENTER -->
+			<div class="relative w-full md:w-96">
+				<i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+
+				<input id="history-search" type="text"
+					placeholder="Tìm lịch sử theo sản phẩm, ITEM, barcode..."
+					class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+			</div>
+
+			<!-- RIGHT -->
+			<button onclick="exportHistoryToExcel()" 
+				class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors whitespace-nowrap">
+
+				<i class="fas fa-file-excel"></i>
+				Xuất lịch sử
+			</button>
+
+		</div>
+
+		<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm desktop-table">
+			<div class="overflow-x-auto">
+				<table class="w-full text-left border-collapse min-w-[800px]">
+					<thead class="bg-slate-50 border-b border-slate-200">
+						<tr>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Thời gian</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Thông tin sản phẩm</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên NCC</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mã NCC</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mô tả lỗi</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Kết quả</th>
+						</tr>
+					</thead>
+					<tbody id="history-list" class="divide-y divide-slate-100"></tbody>
+				</table>
+			</div>
+		</div>
+
+		<div id="history-mobile-list" class="mobile-card-list space-y-3"></div>
+	</main>
+
+	<!-- View Users -->
+	<main id="view-users" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 hidden">
+
+		<div class="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6">
+
+			<!-- LEFT -->
+			<div class="w-full md:w-auto">
+				<h2 class="text-2xl font-bold text-slate-800">
+					Quản lý tài khoản
+				</h2>
+
+				<p class="text-sm text-slate-500 mt-1">
+					Quản lý tài khoản nội bộ hệ thống
+				</p>
+			</div>
+
+			<!-- CENTER -->
+			<div class="relative w-full md:w-96">
+				<i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+
+				<input id="users-search" type="text"
+					placeholder="Tìm tài khoản, họ tên, role..."
+					class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+			</div>
+
+			<!-- RIGHT -->
+			<button onclick="toggleModal('modal-user', true)"
+				class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 whitespace-nowrap">
+
+				<i class="fas fa-user-plus"></i>
+				Thêm tài khoản
+			</button>
+
+		</div>
+
+		<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm desktop-table">
+
+			<div class="overflow-x-auto">
+				<table class="w-full text-left border-collapse min-w-[800px]">
+
+					<thead class="bg-slate-50 border-b border-slate-200">
+						<tr>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Tài khoản</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Họ tên</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Role</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Trạng thái</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Ngày tạo</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase text-right">Hành động</th>
+						</tr>
+					</thead>
+
+					<tbody id="users-list" class="divide-y divide-slate-100"></tbody>
+
+				</table>
+			</div>
+		</div>
+		<div id="users-mobile-list" class="mobile-card-list space-y-3"></div>
+
+	</main>
+
+    <!-- Modal: Báo lỗi mới -->
+    <div id="modal-defect" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in">
+            <div class="flex items-center justify-between p-6 border-b">
+                <h2 class="text-xl font-bold">Báo cáo lỗi</h2>
+                <button onclick="toggleModal('modal-defect', false)" class="p-2 hover:bg-slate-100 rounded-full"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="defect-form" class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                <div class="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                    <label class="block text-sm font-bold text-blue-700 mb-1">Quét Mã vạch</label>
+                    <input type="text" id="auto-barcode" placeholder="Nhập mã vạch..." class="w-full px-4 py-2 border-blue-200 border rounded-lg outline-none">
+                    <p id="search-status" class="text-[10px] mt-1 text-blue-600 hidden">Đã tìm thấy thông tin!</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <input required name="product_name" id="f-product_name" placeholder="Tên sản phẩm" class="px-3 py-2 border rounded-lg">
+                    <input required name="sku" id="f-sku" placeholder="Item" class="px-3 py-2 border rounded-lg font-mono">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <input name="vendor_name" id="f-vendor_name" placeholder="Tên NCC" class="px-3 py-2 border rounded-lg">
+                    <input name="vendor_id" id="f-vendor_id" placeholder="Mã NCC" class="px-3 py-2 border rounded-lg font-mono">
+                </div>
+                <input required name="defect_type" placeholder="Mô tả lỗi" class="w-full px-3 py-2 border rounded-lg">
+				<div class="space-y-2">
+					<label class="block text-sm font-medium text-slate-700">Số lượng lỗi</label>
+					<input type="number" name="quantity" id="f-quantity" min="1" value="1" 
+						   class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+				</div>
+				<div class="space-y-2">
+					<label class="block text-sm font-medium text-slate-700">Hình ảnh sản phẩm lỗi</label>
+					<input type="file" id="f-image" accept="image/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+					<img id="image-preview" class="hidden mt-2 w-full h-32 object-cover rounded-lg border">
+				</div>
+                <div class="grid grid-cols-2 gap-4">
+                    <select name="severity" class="px-3 py-2 border rounded-lg">
+                        <option value="Low">Thấp</option>
+                        <option value="Medium" selected>Trung bình</option>
+                        <option value="High">Nghiêm trọng</option>
+                    </select>
+                    <select name="status" class="px-3 py-2 border rounded-lg">
+                        <option value="Pending">Chờ xử lý</option>
+                        <option value="Fixing">Đang sửa</option>
+                        <option value="Resolved">Đã hoàn thành</option>
+                    </select>
+                </div>
+                <input type="hidden" name="barcode" id="f-barcode">
+                <button type="submit" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">Lưu báo cáo</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Thêm danh mục -->
+    <div id="modal-catalog" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in">
+            <div class="flex items-center justify-between p-6 border-b">
+                <h2 class="text-xl font-bold">Thêm vào danh mục</h2>
+                <button onclick="toggleModal('modal-catalog', false)" class="p-2 hover:bg-slate-100 rounded-full"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="catalog-form" class="p-6 space-y-4">
+                <input required name="barcode" placeholder="Barcode" class="w-full px-3 py-2 border rounded-lg">
+                <input required name="product_name" placeholder="Tên hàng" class="w-full px-3 py-2 border rounded-lg">
+                <input required name="sku" placeholder="ITEM" class="w-full px-3 py-2 border rounded-lg font-mono">
+                <div class="grid grid-cols-2 gap-4">
+                    <input name="vendor_name" placeholder="Nhà cung cấp" class="px-3 py-2 border rounded-lg">
+                    <input name="vendor_id" placeholder="Mã NCC" class="px-3 py-2 border rounded-lg">
+                </div>
+                <button type="submit" class="w-full py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors">Lưu danh mục</button>
+            </form>
+        </div>
+    </div>
+
+	<div id="modal-image" class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4" onclick="toggleImageModal(false)">
+		<div class="relative max-w-4xl w-full flex flex-col items-center">
+			<button class="absolute -top-12 right-0 text-white text-2xl hover:text-red-500 transition-colors">
+				<i class="fas fa-times"></i>
+			</button>
+			<img id="full-res-image" src="" class="max-h-[80vh] w-auto rounded-lg shadow-2xl">
+			<div class="mt-6 flex gap-4">
+				<a id="download-link" href="" download="hinh-anh-loi.jpg" 
+				   class="bg-white text-slate-900 px-6 py-2 rounded-full font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors"
+				   onclick="event.stopPropagation()">
+					<i class="fas fa-download text-blue-600"></i> Tải ảnh về máy
+				</a>
+			</div>
+		</div>
+	</div>
+	
+	<div id="modal-status" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[70] hidden flex items-center justify-center p-4">
+		<div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-5 animate-in max-h-[90vh] overflow-y-auto">
+    
+			<div class="flex items-start justify-between mb-3">
+				<div>
+					<h2 class="text-xl font-bold text-slate-800 leading-tight">
+						Cập nhật kết quả xử lý
+					</h2>
+
+					<p class="text-sm text-slate-400 mt-1">
+						Chạm để cập nhật trạng thái
+					</p>
+				</div>
+
+				<button onclick="toggleModal('modal-status', false)"
+					class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-500 transition-all">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+
+			<input type="hidden" id="status-defect-id">
+
+			<!-- INFO -->
+			<div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-4">
+
+				<div class="font-bold text-lg text-slate-800 mb-3"
+					 id="status-product-name">
+					Tên sản phẩm
+				</div>
+
+				<div class="grid grid-cols-2 gap-3 text-sm">
+
+					<div class="bg-white rounded-xl p-2.5 border border-slate-100">
+						<div class="text-slate-400 text-xs mb-1">Item</div>
+						<div class="font-semibold text-slate-700"
+							 id="status-sku">
+							-
+						</div>
+					</div>
+
+					<div class="bg-white rounded-xl p-3 border border-slate-100">
+						<div class="text-slate-400 text-xs mb-1">Barcode</div>
+						<div class="font-semibold text-slate-700"
+							 id="status-barcode">
+							-
+						</div>
+					</div>
+
+				</div>
+
+				<div class="mt-3 bg-white rounded-xl p-3 border border-slate-100">
+					<div class="text-slate-400 text-xs mb-1">
+						Ngày cập nhật
+					</div>
+
+					<div class="font-semibold text-slate-700"
+						 id="status-date">
+						-
+					</div>
+				</div>
+			</div>
+			
+			<!-- NÚT TRẠNG THÁI -->
+			<div class="space-y-3">
+				<button onclick="saveStatus('Pending')" class="w-full py-2.5 rounded-xl text-sm bg-yellow-100 text-yellow-800 font-bold">
+					Chờ xử lý
+				</button>
+
+				<button onclick="saveStatus('Fixing')" class="w-full py-3 rounded-xl bg-orange-100 text-orange-800 font-bold">
+					Đã sửa / Đang sửa
+				</button>
+
+				<button onclick="saveStatus('Resolved')" class="w-full py-3 rounded-xl bg-green-100 text-green-800 font-bold">
+					Xong
+				</button>
+			</div>
+		</div>
+	</div>
+
+	<div id="modal-user"
+		class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[80] hidden flex items-center justify-center p-4">
+
+		<div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in">
+
+			<div class="flex items-center justify-between p-6 border-b">
+				<h2 class="text-xl font-bold">
+					Thêm tài khoản
+				</h2>
+
+				<button onclick="toggleModal('modal-user', false)"
+					class="p-2 hover:bg-slate-100 rounded-full">
+
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+
+			<form id="user-form" class="p-6 space-y-4">
+
+				<input required name="username"
+					placeholder="Tài khoản"
+					class="w-full px-3 py-2 border rounded-lg">
+
+				<input required name="full_name"
+					placeholder="Họ tên"
+					class="w-full px-3 py-2 border rounded-lg">
+
+				<input required name="password"
+					type="password"
+					placeholder="Mật khẩu"
+					class="w-full px-3 py-2 border rounded-lg">
+
+				<select name="role"
+					class="w-full px-3 py-2 border rounded-lg">
+
+					<option value="staff">Nhân viên</option>
+					<option value="po">PO</option>
+				</select>
+
+				<button type="submit"
+					class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">
+
+					Tạo tài khoản
+				</button>
+
+			</form>
+
+		</div>
+	</div>
+
+	<div id="modal-edit-user"
+		class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[85] hidden flex items-center justify-center p-4">
+
+		<div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in">
+			<div class="flex items-center justify-between p-6 border-b">
+				<h2 class="text-xl font-bold">Sửa tài khoản</h2>
+
+				<button onclick="toggleModal('modal-edit-user', false)"
+					class="p-2 hover:bg-slate-100 rounded-full">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+
+			<form id="edit-user-form" class="p-6 space-y-4">
+				<input type="hidden" id="edit-user-id">
+
+				<input id="edit-full-name"
+					placeholder="Họ tên"
+					class="w-full px-3 py-2 border rounded-lg">
+
+				<select id="edit-role"
+					class="w-full px-3 py-2 border rounded-lg">
+					<option value="staff">Nhân viên</option>
+					<option value="po">PO</option>
+				</select>
+
+				<select id="edit-active"
+					class="w-full px-3 py-2 border rounded-lg">
+					<option value="true">Hoạt động</option>
+					<option value="false">Đã khóa</option>
+				</select>
+
+				<button type="submit"
+					class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold">
+					Lưu thay đổi
+				</button>
+			</form>
+		</div>
+	</div>
+
+    <script>
+        /** * LƯU Ý QUAN TRỌNG:
+         * Supabase/PostgreSQL thường mặc định sử dụng tên cột chữ thường (snake_case).
+         * Tôi đã cập nhật tên cột thành: product_name, vendor_name, vendor_id, defect_type.
+         * Hãy đảm bảo Table Editor trong Supabase của bạn cũng đặt tên cột như vậy.
+         */
+        const SUPABASE_URL = "https://fgujuuybphirvaebfgel.supabase.co"; // Dán URL của bạn vào đây
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZndWp1dXlicGhpcnZhZWJmZ2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwODEwNTAsImV4cCI6MjA4NjY1NzA1MH0.JJTnpEMvmOIUqCXFIJKx0yHCCNhmHc_wiMszw9UwkcI"; // Dán Anon Key của bạn vào đây
+        
+        let supabaseClient;
+        try {
+            if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
+        } catch (e) {
+            console.error("Lỗi khởi tạo Supabase:", e);
+        }
+
+        let defectsData = [];
+        let catalogData = [];
+		
+		let currentUser = null;
+		let currentRole = 'staff';
+		let currentDisplayName = 'Người dùng';
+
+        const defectList = document.getElementById('defect-list');
+		const historyList = document.getElementById('history-list');
+		const catalogList = document.getElementById('catalog-list');
+		const catalogMobileList = document.getElementById('catalog-mobile-list');
+		const searchInput = document.getElementById('search-input');
+		const usersList = document.getElementById('users-list');
+		const usersMobileList = document.getElementById('users-mobile-list');
+		const catalogSearch = document.getElementById('catalog-search');
+		const historySearch = document.getElementById('history-search');
+		const usersSearch = document.getElementById('users-search');
+		
+		let appUsers = [];
+
+		async function fetchUsers() {
+
+			if (!isAdmin()) return;
+
+			const { data, error } = await supabaseClient
+				.from('app_users')
+				.select('*')
+				.order('created_at', { ascending: false });
+
+			if (!error) {
+				appUsers = data || [];
+				renderUsers();
+			}
+		}
+
+		async function deleteAllDefects() {
+			if (!isAdmin()) {
+				alert("Chỉ admin mới được xóa tất cả.");
+				return;
+			}
+
+			if (!confirm("Bạn chắc chắn muốn xóa TẤT CẢ báo cáo lỗi?")) return;
+			if (!confirm("Thao tác này không thể hoàn tác. Xác nhận lần cuối?")) return;
+
+			try {
+				const defectsWithImages = defectsData.filter(d => d.image_url);
+
+				if (defectsWithImages.length > 0) {
+					const filePaths = defectsWithImages.map(d => {
+						const urlParts = d.image_url.split('/');
+						const fileName = urlParts[urlParts.length - 1];
+						return `defects/${fileName}`;
+					});
+
+					await supabaseClient.storage
+						.from('defect-images')
+						.remove(filePaths);
+				}
+
+				const { error } = await supabaseClient
+					.from('defects')
+					.delete()
+					.neq('id', '00000000-0000-0000-0000-000000000000');
+
+				if (error) throw error;
+
+				alert("Đã xóa tất cả báo cáo lỗi.");
+				await fetchDefects();
+
+			} catch (error) {
+				alert("Lỗi khi xóa tất cả: " + error.message);
+			}
+		}
+
+		async function toggleUserStatus(id, currentStatus) {
+
+			const { error } = await supabaseClient
+				.from('app_users')
+				.update({
+					active: !currentStatus
+				})
+				.eq('id', id);
+
+			if (!error) {
+				fetchUsers();
+			}
+		}
+
+		async function deleteUser(id) {
+
+			if (!confirm('Xác nhận xóa tài khoản?')) return;
+
+			const { error } = await supabaseClient
+				.from('app_users')
+				.delete()
+				.eq('id', id);
+
+			if (!error) {
+				fetchUsers();
+			}
+		}
+		
+        async function init() {
+			if (!supabaseClient) {
+				updateStatusUI('offline');
+				return;
+			}
+			updateStatusUI('connecting');
+			
+			// Tải dữ liệu lần đầu
+			await Promise.all([fetchDefects(), fetchCatalog()]);
+			updateStatusUI('online');
+
+			// Thiết lập Realtime cho bảng Defects
+			supabaseClient
+				.channel('realtime-defects')
+				.on('postgres_changes', { 
+					event: '*', 
+					schema: 'public', 
+					table: 'defects' 
+				}, (payload) => {
+					console.log('Có thay đổi tại bảng Defects:', payload);
+					fetchDefects(); // Tải lại danh sách khi có biến động (Thêm/Sửa/Xóa)
+				})
+				.subscribe();
+
+			// Thiết lập Realtime cho bảng Catalog
+			supabaseClient
+				.channel('realtime-catalog')
+				.on('postgres_changes', { 
+					event: '*', 
+					schema: 'public', 
+					table: 'catalog' 
+				}, (payload) => {
+					console.log('Có thay đổi tại bảng Catalog:', payload);
+					fetchCatalog(); // Tải lại danh mục
+				})
+				.subscribe();
+		}
+
+        async function fetchDefects() {
+            const { data, error } = await supabaseClient.from('defects').select('*').order('created_at', { ascending: false });
+            if (!error) { 
+				defectsData = data || []; 
+				renderDashboard();
+				renderHistory();
+				updateStats();
+			}
+        }
+
+        async function fetchCatalog() {
+            const { data, error } = await supabaseClient.from('catalog').select('*');
+            if (!error) { catalogData = data || []; renderCatalog(); }
+        }
+
+		function openEditUserModal(id) {
+			const user = appUsers.find(u => u.id === id);
+			if (!user) return;
+
+			document.getElementById('edit-user-id').value = user.id;
+			document.getElementById('edit-full-name').value = user.full_name || '';
+			document.getElementById('edit-role').value = user.role || 'staff';
+			document.getElementById('edit-active').value = String(user.active);
+
+			toggleModal('modal-edit-user', true);
+		}
+
+		document.getElementById('edit-user-form').onsubmit = async (e) => {
+			e.preventDefault();
+
+			const id = document.getElementById('edit-user-id').value;
+
+			const payload = {
+				full_name: document.getElementById('edit-full-name').value.trim(),
+				role: document.getElementById('edit-role').value,
+				active: document.getElementById('edit-active').value === 'true'
+			};
+
+			const { error } = await supabaseClient
+				.from('app_users')
+				.update(payload)
+				.eq('id', id);
+
+			if (error) {
+				alert("Lỗi cập nhật tài khoản: " + error.message);
+				return;
+			}
+
+			toggleModal('modal-edit-user', false);
+			await fetchUsers();
+		};
+
+		function isAdmin() {
+			return currentRole === 'admin';
+		}
+
+		function isPO() {
+			return currentRole === 'po';
+		}
+
+		function canManageData() {
+			return currentRole === 'admin' || currentRole === 'po';
+		}
+
+		function updateHelloUser() {
+
+			const el = document.getElementById('hello-user');
+
+			if (!el) return;
+
+			el.innerText = currentDisplayName || 'Người dùng';
+		}
+
+        function renderDashboard() {
+			const listContainer = document.getElementById('defect-list');
+			listContainer.classList.add('opacity-50');
+            const search = searchInput.value.toLowerCase();
+            const filter = document.getElementById('filter-status').value;
+            
+            const query = searchInput.value.toLowerCase().trim();
+    
+			const filtered = defectsData.filter(d => {
+				if (d.status === 'Resolved') return false;
+
+				const searchStr = `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''}`.toLowerCase();
+
+				if (query.includes('*')) {
+					const pattern = wildcardToRegex(query);
+					return pattern.test(d.product_name || '') || pattern.test(d.barcode || '') || pattern.test(d.sku || '');
+				}
+
+				const matchSearch = searchStr.includes(query);
+				const matchStatus = filter === 'All' || d.status === filter;
+
+				return matchSearch && matchStatus;
+			});
+
+            defectList.innerHTML = filtered.map(d => `
+				<tr onclick="openStatusModal('${d.id}')" class="hover:bg-slate-50 group cursor-pointer">
+					<td class="px-6 py-4 whitespace-nowrap">
+						<div class="text-xs text-slate-600 font-medium">${formatDateTime(d.created_at)}</div>
+					</td>
+					<td class="px-6 py-4">
+						<div class="flex items-center gap-3">
+							${d.image_url ? 
+								`<img src="${d.image_url}" 
+									  onclick="viewImage('${d.image_url}')" 
+									  class="w-12 h-12 rounded-lg shadow-sm object-cover cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all">` : 
+								`<div class="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-300">
+									<i class="fas fa-image"></i>
+								 </div>`
+							}
+							<div>
+								<div class="font-semibold text-slate-800">${d.product_name || 'N/A'}</div>
+								<div class="flex flex-col gap-1 mt-1">
+									<span class="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-fit">ITEM: ${d.sku || 'N/A'}</span>
+									<span class="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded w-fit">BC: ${d.barcode || 'N/A'}</span>
+									<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded w-fit">SL: ${d.quantity || 1}</span>
+								</div>
+							</div>
+						</div>
+					</td>
+					<td class="px-6 py-4 text-sm font-mono text-slate-600">${d.vendor_id || '-'}</td>
+					<td class="px-6 py-4 text-sm text-slate-700">${d.vendor_name || '-'}</td> <td class="px-6 py-4">
+						<div class="text-sm font-medium">${d.defect_type || 'Lỗi chưa xác định'}</div>
+						<span class="text-[10px] px-2 py-0.5 rounded-full border font-bold ${getSevClass(d.severity)}">${d.severity || 'Medium'}</span>
+					</td>
+					<td class="px-6 py-4">
+						<span class="inline-flex items-center whitespace-nowrap text-sm rounded-lg border px-3 py-1 font-medium ${getStatusClass(d.status)}">
+							${getStatusText(d.status)}
+						</span>
+					</td>
+					<td class="px-6 py-4 text-right">
+						${isAdmin() ? `
+							<button onclick="event.stopPropagation(); deleteItem('defects', '${d.id}')" 
+								class="text-red-500 bg-red-50 px-3 py-2 rounded-xl">
+								<i class="fas fa-trash"></i>
+							</button>
+						` : ''}
+					</td>
+				</tr>
+			`).join('');
+			listContainer.classList.remove('opacity-50');
+			
+			document.getElementById('defect-mobile-list').innerHTML = filtered.map(d => `
+				<div onclick="openStatusModal('${d.id}')" 
+					 class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm active:scale-[0.99] transition cursor-pointer">
+
+					<div class="flex gap-3">
+						${d.image_url ? 
+							`<img src="${d.image_url}" 
+								onclick="event.stopPropagation(); viewImage('${d.image_url}')" 
+								class="w-20 h-20 rounded-xl object-cover border">` :
+							`<div class="w-20 h-20 rounded-xl bg-slate-100 flex items-center justify-center text-slate-300">
+								<i class="fas fa-image text-2xl"></i>
+							</div>`
+						}
+
+						<div class="flex-1 min-w-0">
+							<div class="font-bold text-slate-800 text-base leading-snug">
+								${d.product_name || 'N/A'}
+							</div>
+
+							<div class="text-xs text-slate-500 mt-1">
+								${formatDateTime(d.created_at)}
+							</div>
+
+							<div class="flex flex-wrap gap-1 mt-2">
+								<span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+									ITEM: ${d.sku || 'N/A'}
+								</span>
+								<span class="text-[11px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+									BC: ${d.barcode || 'N/A'}
+								</span>
+								<span class="text-[11px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">
+									SL: ${d.quantity || 1}
+								</span>
+							</div>
+						</div>
+					</div>
+
+					<div class="mt-3 grid grid-cols-2 gap-2 text-xs">
+						<div class="bg-slate-50 rounded-xl p-2">
+							<div class="text-slate-400">Tên NCC</div>
+							<div class="font-semibold text-slate-700">${d.vendor_name || '-'}</div>
+						</div>
+
+						<div class="bg-slate-50 rounded-xl p-2">
+							<div class="text-slate-400">Mã NCC</div>
+							<div class="font-mono font-semibold text-slate-700">${d.vendor_id || '-'}</div>
+						</div>
+					</div>
+
+					<div class="mt-3">
+						<div class="text-xs text-slate-400">Mô tả lỗi</div>
+						<div class="font-medium text-sm text-slate-700">${d.defect_type || 'Lỗi chưa xác định'}</div>
+					</div>
+
+					<div class="mt-3 flex items-center justify-between">
+						<span class="text-xs rounded-full border px-3 py-1 font-bold ${getStatusClass(d.status)}">
+							${getStatusText(d.status)}
+						</span>
+
+						${isAdmin() ? `
+							<button onclick="event.stopPropagation(); deleteItem('defects', '${d.id}')" 
+								class="text-red-500 bg-red-50 px-3 py-2 rounded-xl">
+								<i class="fas fa-trash"></i>
+							</button>
+						` : ''}
+					</div>
+				</div>
+			`).join('');
+        }
+
+		function renderHistory() {
+			const query = (historySearch?.value || '').toLowerCase().trim();
+
+			const historyData = defectsData.filter(d => {
+				if (d.status !== 'Resolved') return false;
+
+				const searchStr = `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''}`.toLowerCase();
+
+				return searchStr.includes(query);
+			});
+
+			historyList.innerHTML = historyData.map(d => `
+				<tr class="hover:bg-slate-50 group">
+					<td class="px-6 py-4 whitespace-nowrap">
+						<div class="text-xs text-slate-600 font-medium">${formatDateTime(d.created_at)}</div>
+					</td>
+
+					<td class="px-6 py-4">
+						<div class="flex items-center gap-3">
+							${d.image_url ? 
+								`<img src="${d.image_url}" 
+									onclick="viewImage('${d.image_url}')" 
+									class="w-12 h-12 rounded-lg shadow-sm object-cover cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all">` : 
+								`<div class="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-300">
+									<i class="fas fa-image"></i>
+								</div>`
+							}
+
+							<div>
+								<div class="font-semibold text-slate-800">${d.product_name || 'N/A'}</div>
+								<div class="flex flex-col gap-1 mt-1">
+									<span class="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-fit">ITEM: ${d.sku || 'N/A'}</span>
+									<span class="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded w-fit">BC: ${d.barcode || 'N/A'}</span>
+									<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded w-fit">SL: ${d.quantity || 1}</span>
+								</div>
+							</div>
+						</div>
+					</td>
+
+					<td class="px-6 py-4 text-sm text-slate-700">${d.vendor_name || '-'}</td>
+					<td class="px-6 py-4 text-sm font-mono text-slate-600">${d.vendor_id || '-'}</td>
+
+					<td class="px-6 py-4">
+						<div class="text-sm font-medium">${d.defect_type || 'Lỗi chưa xác định'}</div>
+						<span class="text-[10px] px-2 py-0.5 rounded-full border font-bold ${getSevClass(d.severity)}">${d.severity || 'Medium'}</span>
+					</td>
+
+					<td class="px-6 py-4">
+						<span class="inline-flex items-center whitespace-nowrap text-sm rounded-lg border px-3 py-1 font-medium ${getStatusClass(d.status)}">
+							${getStatusText(d.status)}
+						</span>
+					</td>
+				</tr>
+			`).join('');
+
+			document.getElementById('history-mobile-list').innerHTML = historyData.map(d => `
+				<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+					<div class="flex gap-3">
+						${d.image_url ? 
+							`<img src="${d.image_url}" 
+								onclick="viewImage('${d.image_url}')" 
+								class="w-20 h-20 rounded-xl object-cover border">` :
+							`<div class="w-20 h-20 rounded-xl bg-slate-100 flex items-center justify-center text-slate-300">
+								<i class="fas fa-image text-2xl"></i>
+							</div>`
+						}
+
+						<div class="flex-1 min-w-0">
+							<div class="font-bold text-slate-800 text-base leading-snug">
+								${d.product_name || 'N/A'}
+							</div>
+
+							<div class="text-xs text-slate-500 mt-1">
+								${formatDateTime(d.created_at)}
+							</div>
+
+							<div class="flex flex-wrap gap-1 mt-2">
+								<span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+									ITEM: ${d.sku || 'N/A'}
+								</span>
+								<span class="text-[11px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+									BC: ${d.barcode || 'N/A'}
+								</span>
+								<span class="text-[11px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">
+									SL: ${d.quantity || 1}
+								</span>
+							</div>
+						</div>
+					</div>
+
+					<div class="mt-3">
+						<div class="text-xs text-slate-400">Mô tả lỗi</div>
+						<div class="font-medium text-sm text-slate-700">${d.defect_type || 'Lỗi chưa xác định'}</div>
+					</div>
+
+					<div class="mt-3">
+						<span class="text-xs rounded-full border px-3 py-1 font-bold ${getStatusClass(d.status)}">
+							${getStatusText(d.status)}
+						</span>
+					</div>
+				</div>
+			`).join('');
+		}
+
+        function renderCatalog() {
+			const query = (catalogSearch?.value || '').toLowerCase().trim();
+
+			const filteredCatalog = catalogData.filter(c => {
+				const searchStr = `${c.barcode || ''} ${c.product_name || ''} ${c.sku || ''} ${c.vendor_name || ''} ${c.vendor_id || ''}`.toLowerCase();
+				return searchStr.includes(query);
+			});
+
+			catalogList.innerHTML = filteredCatalog.map(c => `
+				<tr class="hover:bg-slate-50 transition-colors">
+					<td class="px-6 py-4 font-mono text-blue-600 text-sm font-bold">${c.barcode}</td>
+					<td class="px-6 py-4 font-medium">${c.product_name}</td>
+					<td class="px-6 py-4 font-mono text-xs">${c.sku}</td>
+					<td class="px-6 py-4 text-sm font-mono text-slate-600">${c.vendor_id || '-'}</td>
+					<td class="px-6 py-4 text-sm text-slate-700">${c.vendor_name || '-'}</td> <td class="px-6 py-4 text-right">
+						<!-- <button onclick="deleteItem('catalog', '${c.id}')" class="text-red-300 hover:text-red-600 p-2">
+							<i class="fas fa-times"></i>
+						</button> -->
+						<button onclick="event.stopPropagation(); deleteItem('catalog', '${c.id}')" 
+							class="text-red-500 bg-red-50 px-3 py-2 rounded-xl">
+							<i class="fas fa-trash"></i>
+						</button>
+					</td>
+				</tr>
+			`).join('');
+			catalogMobileList.innerHTML = filteredCatalog.map(c => `
+				<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+
+					<div class="flex items-start justify-between gap-3">
+						<div class="min-w-0 flex-1">
+							<div class="font-bold text-slate-800 text-base leading-snug">
+								${c.product_name || 'N/A'}
+							</div>
+
+							<div class="flex flex-wrap gap-1 mt-2">
+								<span class="text-[11px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-mono">
+									BC: ${c.barcode || '-'}
+								</span>
+
+								<span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">
+									ITEM: ${c.sku || '-'}
+								</span>
+							</div>
+						</div>
+
+						${isAdmin() ? `
+							<button onclick="event.stopPropagation(); deleteItem('catalog', '${c.id}')"
+								class="text-red-500 bg-red-50 px-3 py-2 rounded-xl shrink-0">
+								<i class="fas fa-trash"></i>
+							</button>
+						` : ''}
+					</div>
+
+					<div class="mt-3 grid grid-cols-2 gap-2 text-xs">
+						<div class="bg-slate-50 rounded-xl p-2">
+							<div class="text-slate-400">Tên NCC</div>
+							<div class="font-semibold text-slate-700 truncate">
+								${c.vendor_name || '-'}
+							</div>
+						</div>
+
+						<div class="bg-slate-50 rounded-xl p-2">
+							<div class="text-slate-400">Mã NCC</div>
+							<div class="font-mono font-semibold text-slate-700 truncate">
+								${c.vendor_id || '-'}
+							</div>
+						</div>
+					</div>
+
+				</div>
+			`).join('');
+		}
+
+        async function updateDefectStatus(id, status) {
+            await supabaseClient.from('defects').update({ status }).eq('id', id);
+        }
+
+        async function deleteItem(table, id) {
+			if (!confirm("Xác nhận xóa dữ liệu này? Thao tác này sẽ xóa cả hình ảnh đính kèm (nếu có).")) return;
+
+			try {
+				// 1. Nếu là bảng defects, cần xử lý xóa ảnh trong Storage trước
+				if (table === 'defects') {
+					// Lấy thông tin record để có image_url
+					const { data: item, error: fetchError } = await supabaseClient
+						.from('defects')
+						.select('image_url')
+						.eq('id', id)
+						.single();
+
+					if (fetchError) throw fetchError;
+
+					// Nếu có ảnh, thực hiện xóa trong Storage
+					if (item && item.image_url) {
+						// Tách tên file từ URL (Ví dụ: từ .../defects/0.123.jpg lấy ra defects/0.123.jpg)
+						const urlParts = item.image_url.split('/');
+						const fileName = urlParts[urlParts.length - 1];
+						const filePath = `defects/${fileName}`;
+
+						const { error: storageError } = await supabaseClient.storage
+							.from('defect-images')
+							.remove([filePath]);
+
+						if (storageError) {
+							console.error("Lỗi xóa ảnh Storage:", storageError.message);
+							// Bạn có thể quyết định dừng lại hoặc vẫn cho xóa data record tùy nhu cầu
+						}
+					}
+				}
+
+				// 2. Xóa dòng dữ liệu trong Table
+				const { error: deleteError } = await supabaseClient
+					.from(table)
+					.delete()
+					.eq('id', id);
+
+				if (deleteError) throw deleteError;
+
+				alert("Đã xóa dữ liệu thành công!");
+
+			} catch (error) {
+				console.error("Lỗi khi xóa:", error);
+				alert("Có lỗi xảy ra khi xóa: " + error.message);
+			}
+		}
+
+        document.getElementById('defect-form').onsubmit = async (e) => {
+			e.preventDefault();
+			const submitBtn = e.target.querySelector('button[type="submit"]');
+			const imageFile = document.getElementById('f-image').files[0];
+			let imageUrl = null;
+
+			try {
+				submitBtn.disabled = true;
+				submitBtn.innerText = "Đang xử lý...";
+
+				if (imageFile) {
+					// --- BẮT ĐẦU PHẦN NÉN ẢNH ---
+					const options = {
+						maxSizeMB: 0.8,          // Kích thước tối đa (~800KB)
+						maxWidthOrHeight: 1280, // Độ phân giải tối đa (HD)
+						useWebWorker: true
+					};
+					
+					submitBtn.innerText = "Đang nén ảnh...";
+					const compressedFile = await imageCompression(imageFile, options);
+					// --- KẾT THÚC PHẦN NÉN ẢNH ---
+
+					const fileExt = imageFile.name.split('.').pop();
+					const fileName = `${Math.random()}.${fileExt}`;
+					const filePath = `defects/${fileName}`;
+
+					// Sử dụng compressedFile thay vì imageFile
+					const { data: uploadData, error: uploadError } = await supabaseClient.storage
+						.from('defect-images')
+						.upload(filePath, compressedFile);
+
+					if (uploadError) throw uploadError;
+
+					const { data: publicUrlData } = supabaseClient.storage
+						.from('defect-images')
+						.getPublicUrl(filePath);
+					
+					imageUrl = publicUrlData.publicUrl;
+				}
+
+				// 2. Lưu dữ liệu vào Table 'defects'
+				const formData = Object.fromEntries(new FormData(e.target));
+				const payload = {
+					...formData,
+					image_url: imageUrl // Thêm URL ảnh vào dữ liệu lưu trữ
+				};
+
+				const { error } = await supabaseClient.from('defects').insert([payload]);
+				
+				if (error) throw error;
+
+				// Thành công: Reset form và đóng modal
+				toggleModal('modal-defect', false);
+				e.target.reset();
+				document.getElementById('image-preview').classList.add('hidden');
+				alert("Đã lưu báo cáo thành công!");
+
+			} catch (error) {
+				alert("Lỗi: " + error.message);
+			} finally {
+				submitBtn.disabled = false;
+				submitBtn.innerText = "Lưu báo cáo";
+			}
+		};
+
+		// Thêm tính năng xem trước ảnh khi chọn file
+		document.getElementById('f-image').onchange = (e) => {
+			const [file] = e.target.files;
+			const preview = document.getElementById('image-preview');
+			if (file) {
+				preview.src = URL.createObjectURL(file);
+				preview.classList.remove('hidden');
+			}
+		};
+
+        document.getElementById('catalog-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = Object.fromEntries(new FormData(e.target));
+            const { error } = await supabaseClient.from('catalog').insert([formData]);
+            if (!error) {
+                toggleModal('modal-catalog', false);
+                e.target.reset();
+            } else {
+                alert("Lỗi khi lưu danh mục (Kiểm tra tên cột DB): " + error.message);
+            }
+        };
+
+        document.getElementById('excel-input').onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                const workbook = XLSX.read(evt.target.result, { type: 'binary' });
+                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                
+                const rows = json.map(row => ({
+                    barcode: String(row.Mahang || row.Barcode || ""),
+                    product_name: row.Tenhang || row.ProductName || "",
+                    sku: row.MaSanPham || row.SKU || "",
+                    vendor_name: row.VendorName || "",
+                    vendor_id: String(row.VendorId || "")
+                })).filter(r => r.barcode && r.product_name);
+
+                if (rows.length === 0) {
+                    alert("Không tìm thấy dữ liệu hợp lệ trong file Excel.");
+                    return;
+                }
+
+                const { error } = await supabaseClient.from('catalog').insert(rows);
+                if (error) alert("Lỗi khi nhập liệu: " + error.message);
+                else alert(`Đã nhập thành công ${rows.length} sản phẩm.`);
+            };
+            reader.readAsBinaryString(file);
+            e.target.value = ''; 
+        };
+
+		document.getElementById('defect-excel-input').onchange = (e) => {
+			const file = e.target.files[0];
+			if (!file) return;
+
+			const reader = new FileReader();
+
+			reader.onload = async (evt) => {
+				const workbook = XLSX.read(evt.target.result, { type: 'binary' });
+				const sheet = workbook.Sheets[workbook.SheetNames[0]];
+				const json = XLSX.utils.sheet_to_json(sheet);
+
+				const rows = json.map(row => {
+					const statusText = String(row["Trạng thái"] || row.Status || "Pending").trim();
+
+					let status = "Pending";
+					if (statusText === "Đang sửa" || statusText === "Fixing") status = "Fixing";
+					if (statusText === "Xong" || statusText === "Resolved" || statusText === "Đã hoàn thành") status = "Resolved";
+
+					return {
+						barcode: String(row["Barcode"] || row["Mã vạch"] || "").trim(),
+						product_name: row["Tên sản phẩm"] || row.ProductName || "",
+						sku: String(row["SKU"] || row["Item"] || "").trim(),
+						vendor_name: row["Tên NCC"] || row["Tên nhà cung cấp"] || "",
+						vendor_id: String(row["Mã NCC"] || row["Mã nhà cung cấp"] || "").trim(),
+						defect_type: row["Mô tả lỗi"] || row["Loại lỗi"] || "",
+						quantity: Number(row["Số lượng"] || row.Quantity || 1),
+						severity: row["Mức độ"] || row.Severity || "Medium",
+						status: status
+					};
+				}).filter(r => r.product_name && r.defect_type);
+
+				if (rows.length === 0) {
+					alert("Không tìm thấy dữ liệu báo lỗi hợp lệ trong file Excel.");
+					return;
+				}
+
+				const { error } = await supabaseClient
+					.from('defects')
+					.insert(rows);
+
+				if (error) {
+					alert("Lỗi khi nhập báo lỗi: " + error.message);
+				} else {
+					alert(`Đã nhập thành công ${rows.length} dòng báo lỗi.`);
+					await fetchDefects();
+				}
+			};
+
+			reader.readAsBinaryString(file);
+			e.target.value = '';
+		};
+
+		document.addEventListener('keydown', (e) => {
+
+			const loginScreen = document.getElementById('login-screen');
+
+			// chỉ hoạt động khi màn login đang mở
+			if (!loginScreen.classList.contains('hidden')) {
+
+				if (e.key === 'Enter') {
+					loginApp();
+				}
+
+			}
+
+		});
+
+        window.switchTab = (tab) => {
+
+			if (tab === 'catalog' && !canManageData()) {
+				alert("Bạn không có quyền truy cập danh mục hàng hóa.");
+				tab = 'dashboard';
+			}
+
+			if (tab === 'users' && !isAdmin()) {
+				alert("Bạn không có quyền truy cập quản lý tài khoản.");
+				tab = 'dashboard';
+			}
+
+			// views
+			document.getElementById('view-dashboard')
+				.classList.toggle('hidden', tab !== 'dashboard');
+
+			document.getElementById('view-history')
+				.classList.toggle('hidden', tab !== 'history');
+
+			document.getElementById('view-catalog')
+				.classList.toggle('hidden', tab !== 'catalog');
+
+			document.getElementById('view-users')
+				.classList.toggle('hidden', tab !== 'users');
+
+			// tabs active
+			document.getElementById('tab-dashboard')
+				.classList.toggle('tab-active', tab === 'dashboard');
+
+			document.getElementById('tab-history')
+				.classList.toggle('tab-active', tab === 'history');
+
+			document.getElementById('tab-catalog')
+				.classList.toggle('tab-active', tab === 'catalog');
+
+			document.getElementById('tab-users')
+				.classList.toggle('tab-active', tab === 'users');
+
+			// text colors
+			document.getElementById('tab-dashboard')
+				.classList.toggle('text-slate-500', tab !== 'dashboard');
+
+			document.getElementById('tab-history')
+				.classList.toggle('text-slate-500', tab !== 'history');
+
+			document.getElementById('tab-catalog')
+				.classList.toggle('text-slate-500', tab !== 'catalog');
+
+			document.getElementById('tab-users')
+				.classList.toggle('text-slate-500', tab !== 'users');
+				
+			if (tab === 'users') {
+				fetchUsers();
+			}
+			
+			['dashboard', 'history', 'catalog', 'users'].forEach(name => {
+				const el = document.getElementById(`m-tab-${name}`);
+				if (!el) return;
+
+				const active = tab === name;
+
+				el.classList.toggle('text-blue-600', active);
+				el.classList.toggle('bg-blue-50', active);
+				el.classList.toggle('text-slate-500', !active);
+			});
+		};
+
+        window.toggleModal = (id, show) => {
+            document.getElementById(id).classList.toggle('hidden', !show);
+        };
+
+        window.downloadSampleExcel = () => {
+            const data = [{"Mahang":"893123456789","Tenhang":"Sản phẩm Mẫu A","MaSanPham":"SKU-001","VendorName":"Công ty TNHH ABC","VendorId":"NCC-01"}];
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Danh mục");
+            XLSX.writeFile(wb, "Mau_Nhap_Danh_Muc.xlsx");
+        };
+
+        function updateStatusUI(status) {
+            const dot = document.getElementById('status-dot');
+            const text = document.getElementById('status-text');
+            if (status === 'online') {
+                dot.className = "w-2 h-2 rounded-full bg-green-500";
+                text.innerText = "Kết nối thành công";
+            } else if (status === 'offline') {
+                dot.className = "w-2 h-2 rounded-full bg-red-500";
+                text.innerText = "Kết nối thất bại";
+            }
+        }
+
+		// Hàm mở/đóng modal xem ảnh
+		function viewImage(url) {
+			const modal = document.getElementById('modal-image');
+			const img = document.getElementById('full-res-image');
+			const downloadLink = document.getElementById('download-link');
+			
+			img.src = url;
+			downloadLink.href = url;
+			
+			// Xử lý tên file khi tải về dựa trên URL hoặc thời gian
+			const fileName = `defect_${new Date().getTime()}.jpg`;
+			downloadLink.setAttribute('download', fileName);
+
+			modal.classList.remove('hidden');
+		}
+
+		function toggleImageModal(show) {
+			const modal = document.getElementById('modal-image');
+			if (!show) {
+				modal.classList.add('hidden');
+				document.getElementById('full-res-image').src = ''; // Clear src để tránh giật hình khi mở lại
+			}
+		}
+
+		async function downloadImage(url) {
+			const response = await fetch(url);
+			const blob = await response.blob();
+			const blobUrl = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = blobUrl;
+			a.download = `defect-image-${Date.now()}.jpg`;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(blobUrl);
+		}
+
+        const getSevClass = (s) => ({'High':'text-red-700 bg-red-50 border-red-200','Medium':'text-yellow-700 bg-yellow-50 border-yellow-200','Low':'text-blue-700 bg-blue-50 border-blue-200'}[s] || 'text-slate-700 bg-slate-50 border-slate-200');
+        const getStatusClass = (s) => ({'Resolved':'bg-green-100 text-green-800 border-green-200','Fixing':'bg-orange-100 text-orange-800 border-orange-200','Pending':'bg-yellow-100 text-yellow-800 border-yellow-200'}[s] || 'bg-slate-50');
+
+        const updateStats = () => {
+			const totalItems = defectsData.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+			document.getElementById('stat-total').innerText = totalItems;
+            //document.getElementById('stat-total').innerText = defectsData.length;
+            document.getElementById('stat-pending').innerText = defectsData.filter(d => d.status === 'Pending').length;
+            document.getElementById('stat-fixing').innerText = defectsData.filter(d => d.status === 'Fixing').length;
+            document.getElementById('stat-resolved').innerText = defectsData.filter(d => d.status === 'Resolved').length;
+        };
+
+        searchInput.oninput = renderDashboard;
+		catalogSearch?.addEventListener('input', renderCatalog);
+		historySearch?.addEventListener('input', renderHistory);
+		usersSearch?.addEventListener('input', renderUsers);
+        
+        document.getElementById('auto-barcode').oninput = async (e) => {
+			const val = e.target.value.trim();
+			const statusMsg = document.getElementById('search-status');
+			
+			// Nếu xóa trắng ô barcode thì xóa trắng các ô thông tin
+			if (!val) { 
+				statusMsg.classList.add('hidden'); 
+				resetDefectFields();
+				return; 
+			}
+
+			// 1. Tìm nhanh trong catalogData (dữ liệu đã load sẵn)
+			let found = catalogData.find(c => c.barcode === val);
+
+			// 2. Nếu không thấy trong máy, thử truy vấn trực tiếp từ Supabase
+			if (!found && supabaseClient) {
+				statusMsg.innerText = "Đang tìm trong danh mục...";
+				statusMsg.classList.remove('hidden', 'text-blue-600');
+				statusMsg.classList.add('text-slate-400');
+
+				const { data, error } = await supabaseClient
+					.from('catalog')
+					.select('*')
+					.eq('barcode', val)
+					.single();
+				
+				if (data) found = data;
+			}
+
+			// 3. Hiển thị kết quả
+			if (found) {
+				document.getElementById('f-product_name').value = found.product_name;
+				document.getElementById('f-sku').value = found.sku;
+				document.getElementById('f-vendor_name').value = found.vendor_name || '';
+				document.getElementById('f-vendor_id').value = found.vendor_id || '';
+				document.getElementById('f-barcode').value = found.barcode;
+				
+				statusMsg.innerText = "✓ Đã tìm thấy thông tin!";
+				statusMsg.classList.remove('hidden', 'text-slate-400');
+				statusMsg.classList.add('text-blue-600');
+			} else {
+				statusMsg.innerText = "⚠ Không tìm thấy trong danh mục";
+				statusMsg.classList.remove('text-blue-600');
+				statusMsg.classList.add('text-orange-500');
+				// Không reset fields ở đây để người dùng có thể tự nhập tay nếu là hàng mới
+			}
+		};
+
+		// Hàm hỗ trợ xóa trắng form
+		function resetDefectFields() {
+			document.getElementById('f-product_name').value = '';
+			document.getElementById('f-sku').value = '';
+			document.getElementById('f-vendor_name').value = '';
+			document.getElementById('f-vendor_id').value = '';
+			document.getElementById('f-barcode').value = '';
+		}
+		
+		function formatDateTime(dateString) {
+			if (!dateString) return 'N/A';
+			const date = new Date(dateString);
+			return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + 
+				   ' ' + date.toLocaleDateString('vi-VN');
+		}
+
+		function exportDefectsToExcel() {
+			if (defectsData.length === 0) {
+				alert("Không có dữ liệu để xuất!");
+				return;
+			}
+
+			// 1. Chuẩn bị dữ liệu để xuất (chọn lọc và đặt tên cột tiếng Việt)
+			const dataToExport = defectsData.map(d => ({
+				"Thời gian": new Date(d.created_at).toLocaleString('vi-VN'),
+				"Barcode": d.barcode || '',
+				"Tên sản phẩm": d.product_name || '',
+				"Số lượng": d.quantity || 1,
+				"ITEM": d.sku || '',
+				"Mã NCC": d.vendor_id || '',
+				"Tên NCC": d.vendor_name || '',
+				"Loại lỗi": d.defect_type || '',
+				"Mức độ": d.severity || '',
+				"Trạng thái": d.status === 'Pending' ? 'Chờ xử lý' : (d.status === 'Fixing' ? 'Đang sửa' : 'Xong'),
+				"Link hình ảnh": d.image_url || ''
+			}));
+
+			// 2. Tạo Workbook và Worksheet
+			const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+			const workbook = XLSX.utils.book_new();
+			XLSX.utils.book_append_sheet(workbook, worksheet, "Danh sách hàng lỗi");
+
+			// 3. Tự động căn chỉnh độ rộng cột (tùy chọn)
+			const wscols = [
+				{wch: 20}, {wch: 15}, {wch: 30}, {wch: 15}, 
+				{wch: 10}, {wch: 25}, {wch: 20}, {wch: 10}, 
+				{wch: 15}, {wch: 40}
+			];
+			worksheet['!cols'] = wscols;
+
+			// 4. Xuất file với tên file có ngày tháng
+			const today = new Date().toISOString().slice(0, 10);
+			XLSX.writeFile(workbook, `Bao_Cao_Loi_${today}.xlsx`);
+		}
+
+		function exportHistoryToExcel() {
+			const query = (historySearch?.value || '').toLowerCase().trim();
+
+			const historyData = defectsData.filter(d => {
+				if (d.status !== 'Resolved') return false;
+
+				const searchStr = `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''}`.toLowerCase();
+
+				return searchStr.includes(query);
+			});
+
+			if (historyData.length === 0) {
+				alert("Chưa có dữ liệu lịch sử để xuất!");
+				return;
+			}
+
+			const dataToExport = historyData.map(d => ({
+				"Thời gian": new Date(d.created_at).toLocaleString('vi-VN'),
+				"Barcode": d.barcode || '',
+				"Tên sản phẩm": d.product_name || '',
+				"Số lượng": d.quantity || 1,
+				"ITEM": d.sku || '',
+				"Mã NCC": d.vendor_id || '',
+				"Tên NCC": d.vendor_name || '',
+				"Loại lỗi": d.defect_type || '',
+				"Mức độ": d.severity || '',
+				"Trạng thái": "Xong",
+				"Link hình ảnh": d.image_url || ''
+			}));
+
+			const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+			const workbook = XLSX.utils.book_new();
+			XLSX.utils.book_append_sheet(workbook, worksheet, "Lịch sử hàng lỗi");
+
+			const today = new Date().toISOString().slice(0, 10);
+			XLSX.writeFile(workbook, `Lich_Su_Hang_Loi_${today}.xlsx`);
+		}
+
+		async function loginApp() {
+			const mode = document.getElementById('login-mode').value;
+			const username = document.getElementById('login-user').value.trim();
+			const password = document.getElementById('login-pass').value.trim();
+
+			document.getElementById('login-error').classList.add('hidden');
+
+			if (mode === 'auth') {
+				const { data, error } = await supabaseClient.auth.signInWithPassword({
+					email: username,
+					password
+				});
+
+				if (error) {
+					document.getElementById('login-error').innerText = error.message;
+					document.getElementById('login-error').classList.remove('hidden');
+					return;
+				}
+
+				currentUser = data.user;
+				await loadUserRole();
+				currentDisplayName =
+					data.user.email || 'Quản trị';
+
+				updateHelloUser();
+
+				localStorage.setItem('loginMode', 'auth');
+			}
+
+			if (mode === 'app_user') {
+				const { data, error } = await supabaseClient.rpc('login_app_user', {
+					p_username: username,
+					p_password: password
+				});
+
+				if (error || !data || data.length === 0) {
+					document.getElementById('login-error').innerText = 'Sai tài khoản hoặc mật khẩu';
+					document.getElementById('login-error').classList.remove('hidden');
+					return;
+				}
+
+				const user = data[0];
+
+				currentUser = user;
+				currentRole = user.role || 'staff';
+				currentDisplayName =
+					user.full_name || user.username || 'Nhân viên';
+
+				updateHelloUser();
+
+				localStorage.setItem('loginMode', 'app_user');
+				localStorage.setItem('appUser', JSON.stringify(user));
+			}
+
+			document.getElementById('login-screen').classList.add('hidden');
+			applyPermissionUI();
+			await fetchUsers();
+			renderDashboard();
+			renderHistory();
+		}
+
+		async function logoutApp() {
+			const mode = localStorage.getItem('loginMode');
+
+			if (mode === 'auth') {
+				await supabaseClient.auth.signOut();
+			}
+
+			localStorage.removeItem('loginMode');
+			localStorage.removeItem('appUser');
+
+			location.reload();
+		}
+
+		async function loadUserRole() {
+			if (!currentUser) return;
+
+			const { data, error } = await supabaseClient
+				.from('profiles')
+				.select('role')
+				.eq('id', currentUser.id)
+				.single();
+
+			if (!error && data) {
+				currentRole = data.role || 'staff';
+			}
+		}
+
+		async function checkLogin() {
+			const mode = localStorage.getItem('loginMode');
+
+			if (mode === 'app_user') {
+				const savedUser = localStorage.getItem('appUser');
+
+				if (savedUser) {
+					currentUser = JSON.parse(savedUser);
+					currentRole = currentUser.role || 'staff';
+					currentDisplayName =
+						currentUser.full_name || currentUser.username || 'Nhân viên';
+
+					updateHelloUser();
+
+					document.getElementById('login-screen').classList.add('hidden');
+					applyPermissionUI();
+					await fetchUsers();
+					renderDashboard();
+					renderHistory();
+					return;
+				}
+			}
+
+			const { data } = await supabaseClient.auth.getSession();
+
+			if (data.session) {
+				currentUser = data.session.user;
+				await loadUserRole();
+				currentDisplayName =
+					currentUser.email || 'Quản trị';
+
+				updateHelloUser();
+
+				document.getElementById('login-screen').classList.add('hidden');
+				applyPermissionUI();
+				await fetchUsers();
+				renderDashboard();
+				renderHistory();
+			} else {
+				document.getElementById('login-screen').classList.remove('hidden');
+			}
+		}
+
+		function getStatusText(status) {
+			if (status === 'Pending') return 'Chờ xử lý';
+			if (status === 'Fixing') return 'Đã sửa';
+			if (status === 'Resolved') return 'Xong';
+			return 'Chờ xử lý';
+		}
+
+		function openStatusModal(id) {
+
+			const defect = defectsData.find(d => d.id == id);
+
+			if (!defect) return;
+
+			document.getElementById('status-defect-id').value = id;
+
+			document.getElementById('status-product-name').innerText =
+				defect.product_name || 'N/A';
+
+			document.getElementById('status-sku').innerText =
+				defect.sku || '-';
+
+			document.getElementById('status-barcode').innerText =
+				defect.barcode || '-';
+
+			document.getElementById('status-date').innerText =
+				formatDateTime(defect.created_at);
+
+			toggleModal('modal-status', true);
+		}
+
+		async function saveStatus(status) {
+			const id = document.getElementById('status-defect-id').value;
+
+			if (!id) return;
+
+			const { error } = await supabaseClient
+				.from('defects')
+				.update({ status })
+				.eq('id', id);
+
+			if (error) {
+				alert("Lỗi cập nhật trạng thái: " + error.message);
+				return;
+			}
+
+			toggleModal('modal-status', false);
+			await fetchDefects();
+		}
+
+		function downloadDefectSampleExcel() {
+			const data = [{
+				"Barcode": "2110706100077",
+				"Tên sản phẩm": "GẤU ĐỨNG TIM LỚN",
+				"ITEM": "100164",
+				"Tên NCC": "Tên nhà cung cấp mẫu",
+				"Mã NCC": "NCC001",
+				"Mô tả lỗi": "Rách bao bì",
+				"Số lượng": 1,
+				"Mức độ": "Medium",
+				"Trạng thái": "Pending"
+			}];
+
+			const ws = XLSX.utils.json_to_sheet(data);
+			const wb = XLSX.utils.book_new();
+
+			XLSX.utils.book_append_sheet(wb, ws, "Bao cao loi");
+			XLSX.writeFile(wb, "Mau_Nhap_Bao_Cao_Loi.xlsx");
+		}
+
+		function applyPermissionUI() {
+			document.querySelectorAll('.admin-po-only').forEach(el => {
+				el.classList.toggle('hidden', !canManageData());
+			});
+
+			document.querySelectorAll('.admin-only').forEach(el => {
+				el.classList.toggle('hidden', !isAdmin());
+			});
+
+			if (!canManageData()) {
+				document.getElementById('view-catalog').classList.add('hidden');
+				document.getElementById('view-dashboard').classList.remove('hidden');
+			}
+		}
+
+		function renderUsers() {
+
+			const query = (usersSearch?.value || '').toLowerCase().trim();
+
+			const filteredUsers = appUsers.filter(u => {
+				const searchStr = `${u.username || ''} ${u.full_name || ''} ${u.role || ''} ${u.active ? 'hoạt động active' : 'đã khóa inactive'}`.toLowerCase();
+				return searchStr.includes(query);
+			});
+
+			usersList.innerHTML = filteredUsers.map(u => `
+
+				<tr class="hover:bg-slate-50">
+
+					<td class="px-6 py-4 font-semibold">
+						${u.username}
+					</td>
+
+					<td class="px-6 py-4">
+						${u.full_name || '-'}
+					</td>
+
+					<td class="px-6 py-4">
+
+						<span class="px-2 py-1 rounded-full text-xs font-bold
+							${u.role === 'admin'
+								? 'bg-red-100 text-red-700'
+								: u.role === 'po'
+									? 'bg-blue-100 text-blue-700'
+									: 'bg-slate-100 text-slate-700'}">
+
+							${u.role}
+						</span>
+
+					</td>
+
+					<td class="px-6 py-4">
+
+						<span class="px-2 py-1 rounded-full text-xs font-bold
+							${u.active
+								? 'bg-green-100 text-green-700'
+								: 'bg-red-100 text-red-700'}">
+
+							${u.active ? 'Hoạt động' : 'Đã khóa'}
+						</span>
+
+					</td>
+
+					<td class="px-6 py-4 text-sm text-slate-500">
+						${formatDateTime(u.created_at)}
+					</td>
+
+					<td class="px-6 py-4 text-right">
+
+						<div class="flex justify-end gap-2">
+
+							<button onclick="toggleUserStatus('${u.id}', ${u.active})"
+								class="px-3 py-1 rounded-lg text-sm
+								${u.active
+									? 'bg-yellow-100 text-yellow-700'
+									: 'bg-green-100 text-green-700'}">
+
+								${u.active ? 'Khóa' : 'Mở'}
+							</button>
+
+							<button onclick="openEditUserModal('${u.id}')"
+								class="px-3 py-1 rounded-lg bg-blue-100 text-blue-700 text-sm ml-2">
+								Sửa
+							</button>
+
+							<button onclick="deleteUser('${u.id}')"
+								class="px-3 py-1 rounded-lg bg-red-100 text-red-700 text-sm">
+
+								Xóa
+							</button>
+
+						</div>
+
+					</td>
+
+				</tr>
+
+			`).join('');
+			
+			usersMobileList.innerHTML = filteredUsers.map(u => `
+				<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+
+					<div class="flex items-start justify-between gap-3">
+						<div>
+							<div class="font-bold text-slate-800 text-lg">
+								${u.full_name || '-'}
+							</div>
+
+							<div class="text-sm text-slate-500 mt-1">
+								@${u.username}
+							</div>
+						</div>
+
+						<span class="px-2 py-1 rounded-full text-xs font-bold ${
+							u.role === 'admin'
+								? 'bg-red-100 text-red-700'
+								: u.role === 'po'
+									? 'bg-blue-100 text-blue-700'
+									: 'bg-slate-100 text-slate-700'
+						}">
+							${u.role}
+						</span>
+					</div>
+
+					<div class="mt-3 grid grid-cols-2 gap-2 text-xs">
+						<div class="bg-slate-50 rounded-xl p-2">
+							<div class="text-slate-400">Trạng thái</div>
+							<div class="font-bold ${u.active ? 'text-green-600' : 'text-red-600'}">
+								${u.active ? 'Hoạt động' : 'Đã khóa'}
+							</div>
+						</div>
+
+						<div class="bg-slate-50 rounded-xl p-2">
+							<div class="text-slate-400">Ngày tạo</div>
+							<div class="font-semibold text-slate-700">
+								${formatDateTime(u.created_at)}
+							</div>
+						</div>
+					</div>
+
+					<div class="mt-4 grid grid-cols-3 gap-2">
+						<button onclick="openEditUserModal('${u.id}')"
+							class="py-2 rounded-xl bg-blue-50 text-blue-700 font-bold text-sm">
+							Sửa
+						</button>
+
+						<button onclick="toggleUserStatus('${u.id}', ${u.active})"
+							class="py-2 rounded-xl font-bold text-sm ${
+								u.active
+									? 'bg-yellow-50 text-yellow-700'
+									: 'bg-green-50 text-green-700'
+							}">
+							${u.active ? 'Khóa' : 'Mở'}
+						</button>
+
+						<button onclick="deleteUser('${u.id}')"
+							class="py-2 rounded-xl bg-red-50 text-red-700 font-bold text-sm">
+							Xóa
+						</button>
+					</div>
+
+				</div>
+			`).join('');
+		}
+
+		document.getElementById('user-form').onsubmit = async (e) => {
+
+			e.preventDefault();
+
+			const formData = Object.fromEntries(new FormData(e.target));
+
+			const { error } = await supabaseClient.rpc(
+				'create_app_user',
+				{
+					p_username: formData.username,
+					p_password: formData.password,
+					p_full_name: formData.full_name,
+					p_role: formData.role
+				}
+			);
+
+			if (error) {
+				alert(error.message);
+				return;
+			}
+
+			alert("Đã tạo tài khoản!");
+
+			toggleModal('modal-user', false);
+
+			e.target.reset();
+
+			await fetchUsers();
+		};
+
+        init();
+		checkLogin();
+    </script>
+</body>
+</html>
