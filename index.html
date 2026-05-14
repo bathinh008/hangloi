@@ -711,12 +711,8 @@
 	</div>
 
     <script>
-        /** * LƯU Ý QUAN TRỌNG:
-         * Supabase/PostgreSQL thường mặc định sử dụng tên cột chữ thường (snake_case).
-         * Tôi đã cập nhật tên cột thành: product_name, vendor_name, vendor_id, defect_type.
-         * Hãy đảm bảo Table Editor trong Supabase của bạn cũng đặt tên cột như vậy.
-         */
-        const SUPABASE_URL = "https://fgujuuybphirvaebfgel.supabase.co"; // Dán URL của bạn vào đây
+        
+        const SUPABASE_URL = "https://fgujuuybphirvaebfgel.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZndWp1dXlicGhpcnZhZWJmZ2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwODEwNTAsImV4cCI6MjA4NjY1NzA1MH0.JJTnpEMvmOIUqCXFIJKx0yHCCNhmHc_wiMszw9UwkcI"; // Dán Anon Key của bạn vào đây
         
         let supabaseClient;
@@ -1716,7 +1712,7 @@
 				"Barcode": d.barcode || '',
 				"Tên sản phẩm": d.product_name || '',
 				"Số lượng": d.quantity || 1,
-				"ITEM": d.sku || '',
+				"Item": d.sku || '',
 				"Mã NCC": d.vendor_id || '',
 				"Tên NCC": d.vendor_name || '',
 				"Loại lỗi": d.defect_type || '',
@@ -1764,7 +1760,7 @@
 				"Barcode": d.barcode || '',
 				"Tên sản phẩm": d.product_name || '',
 				"Số lượng": d.quantity || 1,
-				"ITEM": d.sku || '',
+				"Item": d.sku || '',
 				"Mã NCC": d.vendor_id || '',
 				"Tên NCC": d.vendor_name || '',
 				"Loại lỗi": d.defect_type || '',
@@ -1965,7 +1961,7 @@
 			const data = [{
 				"Barcode": "2110706100077",
 				"Tên sản phẩm": "GẤU ĐỨNG TIM LỚN",
-				"ITEM": "100164",
+				"Item": "100164",
 				"Tên NCC": "Tên nhà cung cấp mẫu",
 				"Mã NCC": "NCC001",
 				"Mô tả lỗi": "Rách bao bì",
