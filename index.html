@@ -18,6 +18,49 @@
         .animate-in { animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: 600; }
+
+        .sortable-th { position: relative; }
+        .sortable-th > button:not(.excel-filter-btn) { width: 100%; }
+        .sortable-th i { transition: color 0.15s ease, transform 0.15s ease; }
+        .sortable-th:hover { background: #f1f5f9; color: #2563eb; }
+        .sortable-th.active-sort { color: #2563eb; background: #eff6ff; }
+        .excel-filter-btn {
+            position: absolute;
+            top: 50%;
+            right: 8px;
+            transform: translateY(-50%);
+            width: 26px !important;
+            min-width: 26px;
+            max-width: 26px;
+            height: 26px;
+            padding: 0 !important;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            background: transparent;
+        }
+        .excel-filter-btn:hover, .excel-filter-btn.active-filter {
+            color: #2563eb;
+            background: #dbeafe;
+        }
+        .excel-filter-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 8px;
+            z-index: 90;
+            width: 280px;
+            background: white;
+            border: 1px solid #cbd5e1;
+            border-radius: 14px;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+            padding: 10px;
+            text-transform: none;
+            letter-spacing: normal;
+        }
+        .excel-filter-menu.hidden { display: none; }
+        .excel-filter-option-list { max-height: 220px; overflow-y: auto; }
 		@media (max-width: 768px) {
 			.desktop-table {
 				display: none;
@@ -49,6 +92,40 @@
 				display: none;
 			}
 		}
+
+
+        /* Floating button: lên đầu trang */
+        #scroll-top-btn {
+            position: fixed;
+            right: 18px;
+            bottom: 86px;
+            z-index: 90;
+            width: 46px;
+            height: 46px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.25);
+            transform: translateY(14px) scale(0.96);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .2s ease, transform .2s ease;
+        }
+
+        #scroll-top-btn.show {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0) scale(1);
+        }
+
+        @media (min-width: 768px) {
+            #scroll-top-btn {
+                bottom: 28px;
+                right: 28px;
+            }
+        }
+
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen pb-20 md:pb-0">
@@ -103,6 +180,11 @@
 					
 					Quản lý tài khoản
 				</button>
+				<button onclick="switchTab('logs')"
+					id="tab-logs"
+					class="admin-only py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">
+					Nhật ký
+				</button>
 			</nav>
 			<div class="flex items-center gap-3">
 
@@ -116,6 +198,14 @@
 						Người dùng
 					</span>
 				</div>
+
+				<button onclick="toggleNotificationsPanel()"
+					class="relative w-10 h-10 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 flex items-center justify-center transition-colors"
+					title="Thông báo">
+					<i class="fas fa-bell"></i>
+					<span id="notification-badge"
+						class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold items-center justify-center">0</span>
+				</button>
 
 				<button onclick="logoutApp()" 
 					class="text-sm bg-red-50 text-red-600 px-3 py-1 rounded-lg font-semibold">
@@ -131,7 +221,7 @@
 
 	<!-- Mobile Bottom Nav -->
 	<nav id="mobile-bottom-nav"
-		class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] px-2 py-2 grid grid-cols-4 gap-1">
+		class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] px-2 py-2 grid grid-cols-5 gap-1">
 
 		<button onclick="switchTab('dashboard')" id="m-tab-dashboard"
 			class="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-blue-600 bg-blue-50 font-semibold text-[11px]">
@@ -155,6 +245,12 @@
 			class="admin-only flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
 			<i class="fas fa-users-gear text-lg"></i>
 			<span>Tài khoản</span>
+		</button>
+
+		<button onclick="switchTab('logs')" id="m-tab-logs"
+			class="admin-only flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
+			<i class="fas fa-clipboard-list text-lg"></i>
+			<span>Log</span>
 		</button>
 
 	</nav>
@@ -200,7 +296,7 @@
                 <input 
                     type="text" 
                     id="search-input"
-                    placeholder="Tìm theo sản phẩm, ITEM hoặc nhà cung cấp..."
+                    placeholder="Tìm theo sản phẩm, ITEM, tên NCC hoặc mã NCC..."
                     class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 >
             </div>
@@ -237,6 +333,11 @@
 						<i class="fas fa-file-excel"></i> Xuất Excel
 					</button>
 
+					<button onclick="resetTableFilters('dashboard')"
+						class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg flex items-center gap-2 border border-slate-200 transition-colors">
+						<i class="fas fa-rotate-left text-blue-600"></i> Reset lọc
+					</button>
+
 					<button onclick="deleteAllDefects()" 
 						class="admin-only bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
 						<i class="fas fa-trash-alt"></i>
@@ -256,11 +357,25 @@
                 <table class="w-full text-left border-collapse min-w-[800px]">
                     <thead class="bg-slate-50 border-b border-slate-200">
 						<tr>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Thời gian</th> <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Thông tin sản phẩm lỗi</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên Nhà cung cấp</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mã Nhà cung cấp</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mô tả lỗi</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Kết quả</th> <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Xóa</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('dashboard', 'created_at')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Thời gian <i id="sort-dashboard-created_at" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('dashboard', 'product_name')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Thông tin sản phẩm lỗi <i id="sort-dashboard-product_name" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('dashboard', 'vendor_name')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Tên Nhà cung cấp <i id="sort-dashboard-vendor_name" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('dashboard', 'vendor_id')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Mã Nhà cung cấp <i id="sort-dashboard-vendor_id" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('dashboard', 'defect_type')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Mô tả lỗi <i id="sort-dashboard-defect_type" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('dashboard', 'status')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Kết quả <i id="sort-dashboard-status" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Xóa</th>
 						</tr>
 					</thead>
                     <tbody id="defect-list" class="divide-y divide-slate-100"></tbody>
@@ -285,7 +400,7 @@
 					<i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
 
 					<input id="catalog-search" type="text"
-						placeholder="Tìm barcode, tên sản phẩm, ITEM, NCC..."
+						placeholder="Tìm barcode, tên sản phẩm, ITEM, tên NCC hoặc mã NCC..."
 						class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
 				</div>
 
@@ -325,11 +440,21 @@
                 <table class="w-full text-left border-collapse min-w-[800px]">
                     <thead class="bg-slate-50 border-b border-slate-200">
                         <tr>
-                            <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mã vạch</th>
-                            <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên sản phẩm</th>
-                            <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Item</th>
-                            <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên Nhà cung cấp</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mã Nhà cung cấp</th>
+                            <th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('catalog', 'barcode')">
+                                <button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Mã vạch <i id="sort-catalog-barcode" class="fas fa-sort text-slate-300"></i></button>
+                            </th>
+                            <th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('catalog', 'product_name')">
+                                <button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Tên sản phẩm <i id="sort-catalog-product_name" class="fas fa-sort text-slate-300"></i></button>
+                            </th>
+                            <th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('catalog', 'sku')">
+                                <button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Item <i id="sort-catalog-sku" class="fas fa-sort text-slate-300"></i></button>
+                            </th>
+                            <th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('catalog', 'vendor_name')">
+                                <button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Tên Nhà cung cấp <i id="sort-catalog-vendor_name" class="fas fa-sort text-slate-300"></i></button>
+                            </th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('catalog', 'vendor_id')">
+                                <button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Mã Nhà cung cấp <i id="sort-catalog-vendor_id" class="fas fa-sort text-slate-300"></i></button>
+                            </th>
                             <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Xóa</th>
                         </tr>
                     </thead>
@@ -360,17 +485,25 @@
 				<i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
 
 				<input id="history-search" type="text"
-					placeholder="Tìm lịch sử theo sản phẩm, ITEM, barcode..."
+					placeholder="Tìm lịch sử theo sản phẩm, ITEM, barcode, tên NCC hoặc mã NCC..."
 					class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
 			</div>
 
 			<!-- RIGHT -->
-			<button onclick="exportHistoryToExcel()" 
-				class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors whitespace-nowrap">
+			<div class="flex gap-2 w-full md:w-auto">
+				<button onclick="exportHistoryToExcel()" 
+					class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors whitespace-nowrap">
 
-				<i class="fas fa-file-excel"></i>
-				Xuất lịch sử
-			</button>
+					<i class="fas fa-file-excel"></i>
+					Xuất lịch sử
+				</button>
+
+				<button onclick="resetTableFilters('history')"
+					class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg flex items-center gap-2 border border-slate-200 transition-colors whitespace-nowrap">
+					<i class="fas fa-rotate-left text-blue-600"></i>
+					Reset lọc
+				</button>
+			</div>
 
 		</div>
 
@@ -379,12 +512,24 @@
 				<table class="w-full text-left border-collapse min-w-[800px]">
 					<thead class="bg-slate-50 border-b border-slate-200">
 						<tr>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Thời gian</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Thông tin sản phẩm</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên NCC</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mã NCC</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mô tả lỗi</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Kết quả</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('history', 'created_at')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Thời gian <i id="sort-history-created_at" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('history', 'product_name')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Thông tin sản phẩm <i id="sort-history-product_name" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('history', 'vendor_name')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Tên NCC <i id="sort-history-vendor_name" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('history', 'vendor_id')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Mã NCC <i id="sort-history-vendor_id" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('history', 'defect_type')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Mô tả lỗi <i id="sort-history-defect_type" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('history', 'status')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Kết quả <i id="sort-history-status" class="fas fa-sort text-slate-300"></i></button>
+							</th>
 						</tr>
 					</thead>
 					<tbody id="history-list" class="divide-y divide-slate-100"></tbody>
@@ -437,11 +582,21 @@
 
 					<thead class="bg-slate-50 border-b border-slate-200">
 						<tr>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Tài khoản</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Họ tên</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Role</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Trạng thái</th>
-							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Ngày tạo</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase cursor-pointer" onclick="sortTable('users', 'username')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase">Tài khoản <i id="sort-users-username" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase cursor-pointer" onclick="sortTable('users', 'full_name')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase">Họ tên <i id="sort-users-full_name" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase cursor-pointer" onclick="sortTable('users', 'role')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase">Role <i id="sort-users-role" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase cursor-pointer" onclick="sortTable('users', 'active')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase">Trạng thái <i id="sort-users-active" class="fas fa-sort text-slate-300"></i></button>
+							</th>
+							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase cursor-pointer" onclick="sortTable('users', 'created_at')">
+								<button type="button" class="flex items-center gap-2 text-left uppercase">Ngày tạo <i id="sort-users-created_at" class="fas fa-sort text-slate-300"></i></button>
+							</th>
 							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase text-right">Hành động</th>
 						</tr>
 					</thead>
@@ -454,6 +609,55 @@
 		<div id="users-mobile-list" class="mobile-card-list space-y-3"></div>
 
 	</main>
+
+	<!-- View Logs - chỉ admin -->
+	<main id="view-logs" class="admin-only max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 hidden">
+		<div class="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6">
+			<div class="w-full md:w-auto">
+				<h2 class="text-2xl font-bold text-slate-800">Nhật ký hoạt động</h2>
+				<p class="text-sm text-slate-500 mt-1">Chỉ admin mới xem được tài khoản nào đăng nhập, thêm, sửa, xóa, cập nhật dữ liệu.</p>
+			</div>
+
+			<div class="relative w-full md:w-96">
+				<i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+				<input id="logs-search" type="text"
+					placeholder="Tìm tài khoản, hành động, nội dung log..."
+					class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+			</div>
+
+			<select id="logs-action-filter"
+				class="bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500">
+				<option value="All">Tất cả hành động</option>
+				<option value="login">Đăng nhập</option>
+				<option value="logout">Đăng xuất</option>
+				<option value="create">Thêm mới</option>
+				<option value="update">Cập nhật/Sửa</option>
+				<option value="delete">Xóa</option>
+				<option value="import">Nhập Excel</option>
+			</select>
+		</div>
+
+		<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm desktop-table">
+			<div class="overflow-x-auto">
+				<table class="w-full text-left border-collapse min-w-[1000px]">
+					<thead class="bg-slate-50 border-b border-slate-200">
+						<tr>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Thời gian</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tài khoản</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Hành động</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Đối tượng</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nội dung</th>
+							<th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Chi tiết</th>
+						</tr>
+					</thead>
+					<tbody id="logs-list" class="divide-y divide-slate-100"></tbody>
+				</table>
+			</div>
+		</div>
+
+		<div id="logs-mobile-list" class="mobile-card-list space-y-3"></div>
+	</main>
+
 
     <!-- Modal: Báo lỗi mới -->
     <div id="modal-defect" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
@@ -710,6 +914,69 @@
 		</div>
 	</div>
 
+
+	<!-- Notification Panel -->
+	<div id="notification-panel"
+		class="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-[90] hidden p-4"
+		onclick="closeNotificationsPanel()">
+
+		<div class="ml-auto bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in"
+			onclick="event.stopPropagation()">
+
+			<div class="p-4 border-b border-slate-100 flex items-center justify-between gap-3">
+				<div>
+					<h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+						<i class="fas fa-bell text-blue-600"></i>
+						Thông báo
+					</h2>
+					<p class="text-xs text-slate-400 mt-1">
+						Theo dõi tài khoản tạo báo lỗi và cập nhật kết quả
+					</p>
+				</div>
+
+				<button onclick="closeNotificationsPanel()"
+					class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-500 transition-all">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+
+			<div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
+				<div class="text-sm text-slate-500">
+					<span id="notification-count-text">0 thông báo</span>
+				</div>
+
+				<div class="flex gap-2">
+					<button onclick="markAllNotificationsRead()"
+						class="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-semibold hover:bg-blue-100">
+						Đã đọc hết
+					</button>
+
+					<button onclick="clearLocalNotificationsRead()"
+						class="text-xs bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg font-semibold hover:bg-slate-200">
+						Reset đã đọc
+					</button>
+				</div>
+			</div>
+
+			<div id="notification-list" class="max-h-[70vh] overflow-y-auto divide-y divide-slate-100">
+				<div class="p-6 text-center text-slate-400 text-sm">
+					Chưa có thông báo
+				</div>
+			</div>
+		</div>
+	</div>
+
+
+
+    <!-- Nút lên đầu trang -->
+    <button id="scroll-top-btn"
+        onclick="scrollToTop()"
+        class="bg-blue-600 hover:bg-blue-700 text-white"
+        title="Lên đầu trang"
+        aria-label="Lên đầu trang">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
     <script>
         
         const SUPABASE_URL = "https://fgujuuybphirvaebfgel.supabase.co";
@@ -730,6 +997,10 @@
 		let currentUser = null;
 		let currentRole = 'staff';
 		let currentDisplayName = 'Người dùng';
+		let notificationsData = [];
+		let notificationChannelReady = false;
+		let activityLogsData = [];
+		let activityLogChannelReady = false;
 
         const defectList = document.getElementById('defect-list');
 		const historyList = document.getElementById('history-list');
@@ -741,6 +1012,7 @@
 		const catalogSearch = document.getElementById('catalog-search');
 		const historySearch = document.getElementById('history-search');
 		const usersSearch = document.getElementById('users-search');
+		const logsSearch = document.getElementById('logs-search');
 		
 		let appUsers = [];
 
@@ -790,6 +1062,8 @@
 
 				if (error) throw error;
 
+				await createActivityLog('delete', 'defects', null, 'Xóa tất cả báo cáo lỗi', { count: defectsData.length });
+
 				alert("Đã xóa tất cả báo cáo lỗi.");
 				await fetchDefects();
 
@@ -808,6 +1082,7 @@
 				.eq('id', id);
 
 			if (!error) {
+				await createActivityLog('update', 'app_users', id, 'Đổi trạng thái tài khoản', { active: !currentStatus });
 				fetchUsers();
 			}
 		}
@@ -822,6 +1097,7 @@
 				.eq('id', id);
 
 			if (!error) {
+				await createActivityLog('delete', 'app_users', id, 'Xóa tài khoản nội bộ', { id });
 				fetchUsers();
 			}
 		}
@@ -834,7 +1110,7 @@
 			updateStatusUI('connecting');
 			
 			// Tải dữ liệu lần đầu
-			await Promise.all([fetchDefects(), fetchCatalog()]);
+			await Promise.all([fetchDefects(), fetchCatalog(), fetchNotifications()]);
 			updateStatusUI('online');
 
 			// Thiết lập Realtime cho bảng Defects
@@ -862,6 +1138,10 @@
 					fetchCatalog(); // Tải lại danh mục
 				})
 				.subscribe();
+
+			// Thiết lập Realtime cho bảng Notifications
+			setupNotificationRealtime();
+			setupActivityLogRealtime();
 		}
 
         async function fetchDefects() {
@@ -877,6 +1157,404 @@
         async function fetchCatalog() {
             const { data, error } = await supabaseClient.from('catalog').select('*');
             if (!error) { catalogData = data || []; renderCatalog(); }
+        }
+
+        function getCurrentAccountKey() {
+            if (!currentUser) return 'guest';
+
+            return String(
+                currentUser.username ||
+                currentUser.email ||
+                currentUser.id ||
+                'guest'
+            ).toLowerCase();
+        }
+
+        function getNotificationReadKey() {
+            return `notification_read_${getCurrentAccountKey()}`;
+        }
+
+        function getReadNotificationIds() {
+            try {
+                return JSON.parse(localStorage.getItem(getNotificationReadKey()) || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function setReadNotificationIds(ids) {
+            localStorage.setItem(
+                getNotificationReadKey(),
+                JSON.stringify([...new Set(ids)])
+            );
+        }
+
+        function isNotificationRead(id) {
+            return getReadNotificationIds().includes(String(id));
+        }
+
+        async function fetchNotifications() {
+            if (!supabaseClient) return;
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('notifications')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(100);
+
+                if (error) {
+                    console.warn('Chưa đọc được bảng notifications:', error.message);
+                    notificationsData = [];
+                    renderNotifications();
+                    return;
+                }
+
+                notificationsData = data || [];
+                renderNotifications();
+            } catch (error) {
+                console.warn('Lỗi tải thông báo:', error.message);
+            }
+        }
+
+        function setupNotificationRealtime() {
+            if (notificationChannelReady || !supabaseClient) return;
+
+            notificationChannelReady = true;
+
+            supabaseClient
+                .channel('realtime-notifications')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'notifications'
+                }, () => {
+                    fetchNotifications();
+                })
+                .subscribe();
+        }
+
+
+        async function createActivityLog(action, targetType, targetId, description, details = {}) {
+            if (!supabaseClient || !currentUser) return;
+
+            const actorName = currentDisplayName || currentUser.full_name || currentUser.username || currentUser.email || 'Người dùng';
+            const actorUsername = currentUser.username || currentUser.email || currentUser.id || '';
+
+            try {
+                const { error } = await supabaseClient
+                    .from('activity_logs')
+                    .insert([{
+                        action,
+                        target_type: targetType,
+                        target_id: targetId ? String(targetId) : null,
+                        description,
+                        actor_username: actorUsername,
+                        actor_name: actorName,
+                        actor_role: currentRole || 'staff',
+                        details
+                    }]);
+
+                if (error) {
+                    console.warn('Chưa ghi được activity_logs:', error.message);
+                }
+            } catch (error) {
+                console.warn('Lỗi ghi nhật ký:', error.message);
+            }
+        }
+
+        async function fetchActivityLogs() {
+            if (!supabaseClient || !isAdmin()) return;
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('activity_logs')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(300);
+
+                if (error) {
+                    console.warn('Chưa đọc được bảng activity_logs:', error.message);
+                    activityLogsData = [];
+                    renderActivityLogs();
+                    return;
+                }
+
+                activityLogsData = data || [];
+                renderActivityLogs();
+            } catch (error) {
+                console.warn('Lỗi tải nhật ký:', error.message);
+            }
+        }
+
+        function setupActivityLogRealtime() {
+            if (activityLogChannelReady || !supabaseClient) return;
+            activityLogChannelReady = true;
+
+            supabaseClient
+                .channel('realtime-activity-logs')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'activity_logs'
+                }, () => {
+                    if (isAdmin()) fetchActivityLogs();
+                })
+                .subscribe();
+        }
+
+        function getLogActionText(action) {
+            const map = {
+                login: 'Đăng nhập',
+                logout: 'Đăng xuất',
+                create: 'Thêm mới',
+                update: 'Cập nhật/Sửa',
+                delete: 'Xóa',
+                import: 'Nhập Excel'
+            };
+            return map[action] || action || '-';
+        }
+
+        function getLogActionClass(action) {
+            if (action === 'login') return 'bg-blue-50 text-blue-700 border-blue-200';
+            if (action === 'logout') return 'bg-slate-50 text-slate-700 border-slate-200';
+            if (action === 'create' || action === 'import') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            if (action === 'update') return 'bg-orange-50 text-orange-700 border-orange-200';
+            if (action === 'delete') return 'bg-red-50 text-red-700 border-red-200';
+            return 'bg-slate-50 text-slate-700 border-slate-200';
+        }
+
+        function formatLogDetails(details) {
+            if (!details || typeof details !== 'object') return '-';
+
+            const pairs = Object.entries(details)
+                .filter(([_, value]) => value !== undefined && value !== null && value !== '')
+                .slice(0, 8)
+                .map(([key, value]) => {
+                    let textValue = value;
+                    if (typeof value === 'object') textValue = JSON.stringify(value);
+                    return `${key}: ${String(textValue)}`;
+                });
+
+            return pairs.length ? pairs.join(' | ') : '-';
+        }
+
+        function getFilteredActivityLogs() {
+            const query = (logsSearch?.value || '').toLowerCase().trim();
+            const actionFilter = document.getElementById('logs-action-filter')?.value || 'All';
+
+            return activityLogsData.filter(log => {
+                const detailsText = formatLogDetails(log.details || {}).toLowerCase();
+                const searchStr = `${log.actor_username || ''} ${log.actor_name || ''} ${log.actor_role || ''} ${log.action || ''} ${log.target_type || ''} ${log.description || ''} ${detailsText}`.toLowerCase();
+                const matchSearch = !query || searchStr.includes(query);
+                const matchAction = actionFilter === 'All' || log.action === actionFilter;
+                return matchSearch && matchAction;
+            });
+        }
+
+        function renderActivityLogs() {
+            const list = document.getElementById('logs-list');
+            const mobileList = document.getElementById('logs-mobile-list');
+            if (!list || !mobileList) return;
+
+            if (!isAdmin()) {
+                list.innerHTML = '';
+                mobileList.innerHTML = '';
+                return;
+            }
+
+            const rows = getFilteredActivityLogs();
+
+            if (rows.length === 0) {
+                list.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-slate-400">Chưa có nhật ký hoặc chưa tạo bảng activity_logs</td></tr>`;
+                mobileList.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-6 text-center text-slate-400 text-sm">Chưa có nhật ký hoặc chưa tạo bảng activity_logs</div>`;
+                return;
+            }
+
+            list.innerHTML = rows.map(log => `
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-xs font-medium text-slate-600">${formatDateTime(log.created_at)}</td>
+                    <td class="px-6 py-4">
+                        <div class="font-semibold text-slate-800">${log.actor_name || '-'}</div>
+                        <div class="text-xs text-slate-400 font-mono">${log.actor_username || '-'}</div>
+                        <div class="text-[10px] text-blue-600 font-bold uppercase">${log.actor_role || '-'}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="inline-flex items-center rounded-lg border px-3 py-1 text-xs font-bold ${getLogActionClass(log.action)}">${getLogActionText(log.action)}</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm font-mono text-slate-600">${log.target_type || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-slate-700">${log.description || '-'}</td>
+                    <td class="px-6 py-4 text-xs text-slate-500 max-w-[320px] break-words">${formatLogDetails(log.details || {})}</td>
+                </tr>
+            `).join('');
+
+            mobileList.innerHTML = rows.map(log => `
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <div class="font-bold text-slate-800">${log.actor_name || '-'}</div>
+                            <div class="text-xs text-slate-400 font-mono">${log.actor_username || '-'}</div>
+                        </div>
+                        <span class="rounded-lg border px-2 py-1 text-[11px] font-bold ${getLogActionClass(log.action)}">${getLogActionText(log.action)}</span>
+                    </div>
+                    <div class="mt-2 text-xs text-slate-500">${formatDateTime(log.created_at)}</div>
+                    <div class="mt-3 text-sm font-semibold text-slate-700">${log.description || '-'}</div>
+                    <div class="mt-2 text-xs text-slate-500 break-words">${formatLogDetails(log.details || {})}</div>
+                </div>
+            `).join('');
+        }
+
+        function notificationIcon(type) {
+            if (type === 'defect_created') return 'fa-circle-plus text-blue-600 bg-blue-50';
+            if (type === 'defect_resolved') return 'fa-circle-check text-green-600 bg-green-50';
+            return 'fa-bell text-slate-600 bg-slate-100';
+        }
+
+        function renderNotifications() {
+            const list = document.getElementById('notification-list');
+            const badge = document.getElementById('notification-badge');
+            const countText = document.getElementById('notification-count-text');
+
+            if (!list || !badge || !countText) return;
+
+            const unreadCount = notificationsData.filter(n => !isNotificationRead(n.id)).length;
+
+            countText.innerText = `${notificationsData.length} thông báo`;
+
+            if (unreadCount > 0) {
+                badge.innerText = unreadCount > 99 ? '99+' : unreadCount;
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+            } else {
+                badge.classList.add('hidden');
+                badge.classList.remove('flex');
+            }
+
+            if (notificationsData.length === 0) {
+                list.innerHTML = `
+                    <div class="p-6 text-center text-slate-400 text-sm">
+                        Chưa có thông báo
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = notificationsData.map(n => {
+                const read = isNotificationRead(n.id);
+                const iconClass = notificationIcon(n.type);
+
+                return `
+                    <div onclick="markNotificationRead('${n.id}')"
+                        class="p-4 cursor-pointer hover:bg-slate-50 transition-colors ${read ? 'bg-white' : 'bg-blue-50/60'}">
+
+                        <div class="flex gap-3">
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconClass.split(' ').slice(1).join(' ')}">
+                                <i class="fas ${iconClass.split(' ')[0]}"></i>
+                            </div>
+
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="font-bold text-sm text-slate-800 leading-snug">
+                                        ${escapeHtml(n.title || 'Thông báo')}
+                                    </div>
+
+                                    ${read ? '' : '<span class="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0 mt-1"></span>'}
+                                </div>
+
+                                <div class="text-sm text-slate-600 mt-1 leading-relaxed">
+                                    ${escapeHtml(n.message || '')}
+                                </div>
+
+                                <div class="flex flex-wrap gap-1 mt-2">
+                                    ${n.product_name ? `<span class="text-[11px] bg-white border text-slate-600 px-2 py-0.5 rounded-full">${escapeHtml(n.product_name)}</span>` : ''}
+                                    ${n.sku ? `<span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">ITEM: ${escapeHtml(n.sku)}</span>` : ''}
+                                    ${n.barcode ? `<span class="text-[11px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-mono">BC: ${escapeHtml(n.barcode)}</span>` : ''}
+                                </div>
+
+                                <div class="text-[11px] text-slate-400 mt-2">
+                                    ${formatDateTime(n.created_at)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleNotificationsPanel() {
+            const panel = document.getElementById('notification-panel');
+            if (!panel) return;
+
+            panel.classList.toggle('hidden');
+            fetchNotifications();
+        }
+
+        function closeNotificationsPanel() {
+            const panel = document.getElementById('notification-panel');
+            if (panel) panel.classList.add('hidden');
+        }
+
+        function markNotificationRead(id) {
+            const ids = getReadNotificationIds();
+            ids.push(String(id));
+            setReadNotificationIds(ids);
+            renderNotifications();
+        }
+
+        function markAllNotificationsRead() {
+            setReadNotificationIds(notificationsData.map(n => String(n.id)));
+            renderNotifications();
+        }
+
+        function clearLocalNotificationsRead() {
+            localStorage.removeItem(getNotificationReadKey());
+            renderNotifications();
+        }
+
+        async function createNotification(type, defect, extra = {}) {
+            if (!supabaseClient || !currentUser) return;
+
+            const actorName = currentDisplayName || currentUser.full_name || currentUser.username || currentUser.email || 'Người dùng';
+            const actorUsername = currentUser.username || currentUser.email || currentUser.id || '';
+
+            let title = 'Thông báo mới';
+            let message = '';
+
+            if (type === 'defect_created') {
+                title = 'Có hàng lỗi mới';
+                message = `${actorName} vừa cập nhật hàng lỗi mới: ${defect.product_name || 'N/A'}`;
+            }
+
+            if (type === 'defect_resolved') {
+                title = 'Hàng lỗi đã được giải quyết';
+                message = `${actorName} đã cập nhật kết quả Xong cho: ${defect.product_name || 'N/A'}`;
+            }
+
+            try {
+                const { error } = await supabaseClient
+                    .from('notifications')
+                    .insert([{
+                        type,
+                        title,
+                        message,
+                        actor_username: String(actorUsername),
+                        actor_name: actorName,
+                        product_name: defect.product_name || '',
+                        sku: defect.sku || '',
+                        barcode: defect.barcode || '',
+                        defect_id: defect.id || null,
+                        status: extra.status || defect.status || null
+                    }]);
+
+                if (error) {
+                    console.warn('Không tạo được thông báo:', error.message);
+                    return;
+                }
+
+                await fetchNotifications();
+            } catch (error) {
+                console.warn('Lỗi tạo thông báo:', error.message);
+            }
         }
 
 		function openEditUserModal(id) {
@@ -912,6 +1590,8 @@
 				return;
 			}
 
+			await createActivityLog('update', 'app_users', id, 'Sửa tài khoản nội bộ', payload);
+
 			toggleModal('modal-edit-user', false);
 			await fetchUsers();
 		};
@@ -937,29 +1617,425 @@
 			el.innerText = currentDisplayName || 'Người dùng';
 		}
 
+
+        const tableSortState = {
+            dashboard: { key: 'created_at', direction: 'desc' },
+            history: { key: 'created_at', direction: 'desc' },
+            catalog: { key: 'product_name', direction: 'asc' },
+            users: { key: 'created_at', direction: 'desc' }
+        };
+
+        const tableFilterState = {
+            dashboard: {},
+            history: {},
+            catalog: {},
+            users: {}
+        };
+
+        const FILTER_BLANK_VALUE = '__FILTER_BLANK__';
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function getFilterValue(row, key) {
+            if (!row) return FILTER_BLANK_VALUE;
+
+            if (key === 'status') {
+                return row.status ? getStatusText(row.status) : FILTER_BLANK_VALUE;
+            }
+
+            if (key === 'active') {
+                return row.active ? 'Hoạt động' : 'Đã khóa';
+            }
+
+            if (key === 'created_at') {
+                return row.created_at ? formatDateTime(row.created_at) : FILTER_BLANK_VALUE;
+            }
+
+            const value = row[key];
+            if (value === null || value === undefined || String(value).trim() === '') {
+                return FILTER_BLANK_VALUE;
+            }
+
+            return String(value).trim();
+        }
+
+        function getFilterLabel(value) {
+            return value === FILTER_BLANK_VALUE ? '(Trống)' : value;
+        }
+
+        function getSearchFilteredRows(tableName) {
+            if (tableName === 'dashboard') {
+                const query = (searchInput?.value || '').toLowerCase().trim();
+                const statusFilter = document.getElementById('filter-status')?.value || 'All';
+
+                return defectsData.filter(d => {
+                    if (d.status === 'Resolved') return false;
+
+                    const searchStr = `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''}`.toLowerCase();
+
+                    let matchSearch = true;
+                    if (query) {
+                        if (query.includes('*')) {
+                            const pattern = wildcardToRegex(query);
+                            matchSearch = pattern.test(d.product_name || '') || pattern.test(d.barcode || '') || pattern.test(d.sku || '') || pattern.test(d.vendor_name || '') || pattern.test(d.vendor_id || '') || pattern.test(d.defect_type || '');
+                        } else {
+                            matchSearch = searchStr.includes(query);
+                        }
+                    }
+
+                    const matchStatus = statusFilter === 'All' || d.status === statusFilter;
+                    return matchSearch && matchStatus;
+                });
+            }
+
+            if (tableName === 'history') {
+                const query = (historySearch?.value || '').toLowerCase().trim();
+                return defectsData.filter(d => {
+                    if (d.status !== 'Resolved') return false;
+                    const searchStr = `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''}`.toLowerCase();
+                    return searchStr.includes(query);
+                });
+            }
+
+            if (tableName === 'catalog') {
+                const query = (catalogSearch?.value || '').toLowerCase().trim();
+                return catalogData.filter(c => {
+                    const searchStr = `${c.barcode || ''} ${c.product_name || ''} ${c.sku || ''} ${c.vendor_name || ''} ${c.vendor_id || ''}`.toLowerCase();
+                    return searchStr.includes(query);
+                });
+            }
+
+            if (tableName === 'users') {
+                const query = (usersSearch?.value || '').toLowerCase().trim();
+                return appUsers.filter(u => {
+                    const searchStr = `${u.username || ''} ${u.full_name || ''} ${u.role || ''} ${u.active ? 'Hoạt động' : 'Đã khóa'}`.toLowerCase();
+                    return searchStr.includes(query);
+                });
+            }
+
+            return [];
+        }
+
+        function applyTableFilters(rows, tableName, exceptKey = null) {
+            const filters = tableFilterState[tableName] || {};
+
+            return rows.filter(row => {
+                return Object.entries(filters).every(([key, selected]) => {
+                    if (key === exceptKey) return true;
+                    if (!selected || selected.length === 0) return true;
+                    return selected.includes(getFilterValue(row, key));
+                });
+            });
+        }
+
+        function getFilterValues(tableName, key) {
+            const rows = applyTableFilters(getSearchFilteredRows(tableName), tableName, key);
+            const values = [...new Set(rows.map(row => getFilterValue(row, key)))];
+
+            return values.sort((a, b) => getFilterLabel(a).localeCompare(getFilterLabel(b), 'vi', {
+                numeric: true,
+                sensitivity: 'base'
+            }));
+        }
+
+        function closeExcelFilters() {
+            document.querySelectorAll('.excel-filter-menu').forEach(menu => menu.classList.add('hidden'));
+        }
+
+        function enhanceExcelFilters() {
+            document.querySelectorAll('th.sortable-th').forEach(th => {
+                if (th.dataset.filterEnhanced === '1') return;
+
+                const onclick = th.getAttribute('onclick') || '';
+                const match = onclick.match(/sortTable\('([^']+)',\s*'([^']+)'\)/);
+                if (!match) return;
+
+                const tableName = match[1];
+                const key = match[2];
+                const oldButton = th.querySelector('button');
+                if (oldButton) {
+                    oldButton.classList.add('pr-8');
+                }
+
+                const filterBtn = document.createElement('button');
+                filterBtn.type = 'button';
+                filterBtn.className = 'excel-filter-btn';
+                filterBtn.id = `filter-btn-${tableName}-${key}`;
+                filterBtn.title = 'Lọc giống Excel';
+                filterBtn.innerHTML = '<i class="fas fa-filter text-xs"></i>';
+                filterBtn.onclick = (event) => {
+                    event.stopPropagation();
+                    openExcelFilter(tableName, key);
+                };
+
+                const menu = document.createElement('div');
+                menu.id = `filter-menu-${tableName}-${key}`;
+                menu.className = 'excel-filter-menu hidden';
+                menu.onclick = (event) => event.stopPropagation();
+
+                th.appendChild(filterBtn);
+                th.appendChild(menu);
+                th.dataset.filterEnhanced = '1';
+            });
+
+            document.addEventListener('click', closeExcelFilters);
+        }
+
+        function openExcelFilter(tableName, key) {
+            const menuId = `filter-menu-${tableName}-${key}`;
+            const menu = document.getElementById(menuId);
+            if (!menu) return;
+
+            const wasHidden = menu.classList.contains('hidden');
+            closeExcelFilters();
+            if (!wasHidden) return;
+
+            const values = getFilterValues(tableName, key);
+            const currentSelected = tableFilterState[tableName]?.[key] || [];
+            const selectedSet = new Set(currentSelected.length ? currentSelected : values);
+            const isAllChecked = values.length > 0 && values.every(value => selectedSet.has(value));
+
+            menu.innerHTML = `
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <div class="font-bold text-slate-700 text-sm">Lọc dữ liệu</div>
+                    <button type="button" onclick="event.stopPropagation(); clearExcelFilter('${tableName}', '${key}')" class="text-xs text-blue-600 hover:underline">Hiện tất cả</button>
+                </div>
+
+                <input type="text"
+                    placeholder="Tìm trong danh sách lọc..."
+                    class="w-full mb-2 px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    oninput="filterExcelMenuOptions(this)">
+
+                <label class="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-50 text-sm font-semibold text-slate-700 border-b border-slate-100 mb-1">
+                    <input type="checkbox" class="excel-select-all" ${isAllChecked ? 'checked' : ''} onchange="toggleExcelSelectAll(this)">
+                    <span>Select All</span>
+                </label>
+
+                <div class="excel-filter-option-list space-y-1">
+                    ${values.map(value => `
+                        <label class="excel-filter-option flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 text-sm text-slate-700">
+                            <input type="checkbox" class="excel-filter-checkbox" value="${escapeHtml(value)}" ${selectedSet.has(value) ? 'checked' : ''} onchange="syncExcelSelectAll(this)">
+                            <span class="truncate" title="${escapeHtml(getFilterLabel(value))}">${escapeHtml(getFilterLabel(value))}</span>
+                        </label>
+                    `).join('') || '<div class="text-sm text-slate-400 px-2 py-3">Không có dữ liệu</div>'}
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="event.stopPropagation(); closeExcelFilters()" class="py-2 rounded-lg bg-slate-100 text-slate-700 font-semibold text-sm">Hủy</button>
+                    <button type="button" onclick="event.stopPropagation(); applyExcelFilter('${tableName}', '${key}')" class="py-2 rounded-lg bg-blue-600 text-white font-semibold text-sm">Áp dụng</button>
+                </div>
+            `;
+
+            menu.classList.remove('hidden');
+        }
+
+        function filterExcelMenuOptions(input) {
+            const query = input.value.toLowerCase().trim();
+            const menu = input.closest('.excel-filter-menu');
+            if (!menu) return;
+
+            menu.querySelectorAll('.excel-filter-option').forEach(option => {
+                const text = option.innerText.toLowerCase();
+                option.style.display = text.includes(query) ? 'flex' : 'none';
+            });
+        }
+
+        function toggleExcelSelectAll(checkbox) {
+            const menu = checkbox.closest('.excel-filter-menu');
+            if (!menu) return;
+            menu.querySelectorAll('.excel-filter-checkbox').forEach(item => item.checked = checkbox.checked);
+        }
+
+        function syncExcelSelectAll(checkbox) {
+            const menu = checkbox.closest('.excel-filter-menu');
+            if (!menu) return;
+            const boxes = [...menu.querySelectorAll('.excel-filter-checkbox')];
+            const selectAll = menu.querySelector('.excel-select-all');
+            if (selectAll) selectAll.checked = boxes.length > 0 && boxes.every(item => item.checked);
+        }
+
+        function applyExcelFilter(tableName, key) {
+            const menu = document.getElementById(`filter-menu-${tableName}-${key}`);
+            if (!menu) return;
+
+            const allValues = getFilterValues(tableName, key);
+            const checkedValues = [...menu.querySelectorAll('.excel-filter-checkbox:checked')].map(item => item.value);
+
+            if (checkedValues.length === 0) {
+                tableFilterState[tableName][key] = ['__NO_MATCH__'];
+            } else if (checkedValues.length === allValues.length) {
+                delete tableFilterState[tableName][key];
+            } else {
+                tableFilterState[tableName][key] = checkedValues;
+            }
+
+            closeExcelFilters();
+            rerenderTable(tableName);
+        }
+
+        function clearExcelFilter(tableName, key) {
+            if (tableFilterState[tableName]) {
+                delete tableFilterState[tableName][key];
+            }
+            closeExcelFilters();
+            rerenderTable(tableName);
+        }
+
+        function resetExcelFilters(tableName) {
+            if (tableFilterState[tableName]) tableFilterState[tableName] = {};
+            rerenderTable(tableName);
+        }
+
+        function resetTableFilters(tableName) {
+            // Xóa bộ lọc tiêu đề giống Excel
+            if (tableFilterState[tableName]) {
+                tableFilterState[tableName] = {};
+            }
+
+            // Xóa ô tìm kiếm và bộ lọc thường của từng tab
+            if (tableName === 'dashboard') {
+                const search = document.getElementById('search-input');
+                const status = document.getElementById('filter-status');
+                if (search) search.value = '';
+                if (status) status.value = 'All';
+            }
+
+            if (tableName === 'history') {
+                const search = document.getElementById('history-search');
+                if (search) search.value = '';
+            }
+
+            if (tableName === 'catalog') {
+                const search = document.getElementById('catalog-search');
+                if (search) search.value = '';
+            }
+
+            if (tableName === 'users') {
+                const search = document.getElementById('users-search');
+                if (search) search.value = '';
+            }
+
+            closeExcelFilters();
+            rerenderTable(tableName);
+        }
+
+        function rerenderTable(tableName) {
+            if (tableName === 'dashboard') renderDashboard();
+            if (tableName === 'history') renderHistory();
+            if (tableName === 'catalog') renderCatalog();
+            if (tableName === 'users') renderUsers();
+        }
+
+        function updateFilterIndicators(tableName) {
+            const filters = tableFilterState[tableName] || {};
+            document.querySelectorAll(`[id^="filter-btn-${tableName}-"]`).forEach(btn => {
+                btn.classList.remove('active-filter');
+            });
+
+            Object.keys(filters).forEach(key => {
+                const btn = document.getElementById(`filter-btn-${tableName}-${key}`);
+                if (btn) btn.classList.add('active-filter');
+            });
+        }
+
+        function wildcardToRegex(input) {
+            const escaped = input.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+            const pattern = '^' + escaped.replace(/\*/g, '.*') + '$';
+            return new RegExp(pattern, 'i');
+        }
+
+        function sortTable(tableName, key) {
+            const state = tableSortState[tableName];
+            if (!state) return;
+
+            if (state.key === key) {
+                state.direction = state.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.key = key;
+                state.direction = key === 'created_at' ? 'desc' : 'asc';
+            }
+
+            if (tableName === 'dashboard') renderDashboard();
+            if (tableName === 'history') renderHistory();
+            if (tableName === 'catalog') renderCatalog();
+            if (tableName === 'users') renderUsers();
+        }
+
+        function getSortValue(row, key) {
+            if (!row) return '';
+
+            if (key === 'created_at') {
+                return Date.parse(row.created_at || '') || 0;
+            }
+
+            if (key === 'quantity') {
+                return Number(row.quantity || 0);
+            }
+
+            if (key === 'status') {
+                return getStatusText(row.status || '');
+            }
+
+            if (key === 'active') {
+                return row.active ? 'Hoạt động' : 'Đã khóa';
+            }
+
+            return String(row[key] ?? '').toLowerCase().trim();
+        }
+
+        function applyTableSort(rows, tableName) {
+            const state = tableSortState[tableName];
+            if (!state) return rows;
+
+            const direction = state.direction === 'asc' ? 1 : -1;
+            return rows.sort((a, b) => {
+                const va = getSortValue(a, state.key);
+                const vb = getSortValue(b, state.key);
+
+                if (typeof va === 'number' && typeof vb === 'number') {
+                    return (va - vb) * direction;
+                }
+
+                return String(va).localeCompare(String(vb), 'vi', {
+                    numeric: true,
+                    sensitivity: 'base'
+                }) * direction;
+            });
+        }
+
+        function updateSortIndicators(tableName) {
+            const state = tableSortState[tableName];
+            if (!state) return;
+
+            document.querySelectorAll(`[id^="sort-${tableName}-"]`).forEach(icon => {
+                icon.className = 'fas fa-sort text-slate-300';
+                const th = icon.closest('th');
+                if (th) th.classList.remove('active-sort');
+            });
+
+            const activeIcon = document.getElementById(`sort-${tableName}-${state.key}`);
+            if (activeIcon) {
+                activeIcon.className = `fas ${state.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down'} text-blue-600`;
+                const th = activeIcon.closest('th');
+                if (th) th.classList.add('active-sort');
+            }
+        }
+
         function renderDashboard() {
 			const listContainer = document.getElementById('defect-list');
 			listContainer.classList.add('opacity-50');
-            const search = searchInput.value.toLowerCase();
-            const filter = document.getElementById('filter-status').value;
-            
-            const query = searchInput.value.toLowerCase().trim();
-    
-			const filtered = defectsData.filter(d => {
-				if (d.status === 'Resolved') return false;
-
-				const searchStr = `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''}`.toLowerCase();
-
-				if (query.includes('*')) {
-					const pattern = wildcardToRegex(query);
-					return pattern.test(d.product_name || '') || pattern.test(d.barcode || '') || pattern.test(d.sku || '');
-				}
-
-				const matchSearch = searchStr.includes(query);
-				const matchStatus = filter === 'All' || d.status === filter;
-
-				return matchSearch && matchStatus;
-			});
+            let filtered = getSearchFilteredRows('dashboard');
+            filtered = applyTableFilters(filtered, 'dashboard');
+			filtered = applyTableSort(filtered, 'dashboard');
+			updateSortIndicators('dashboard');
+            updateFilterIndicators('dashboard');
 
             defectList.innerHTML = filtered.map(d => `
 				<tr onclick="openStatusModal('${d.id}')" class="hover:bg-slate-50 group cursor-pointer">
@@ -970,7 +2046,7 @@
 						<div class="flex items-center gap-3">
 							${d.image_url ? 
 								`<img src="${d.image_url}" 
-									  onclick="viewImage('${d.image_url}')" 
+									  onclick="event.stopPropagation(); viewImage('${d.image_url}')" 
 									  class="w-12 h-12 rounded-lg shadow-sm object-cover cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all">` : 
 								`<div class="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-300">
 									<i class="fas fa-image"></i>
@@ -986,8 +2062,9 @@
 							</div>
 						</div>
 					</td>
+					<td class="px-6 py-4 text-sm text-slate-700">${d.vendor_name || '-'}</td>
 					<td class="px-6 py-4 text-sm font-mono text-slate-600">${d.vendor_id || '-'}</td>
-					<td class="px-6 py-4 text-sm text-slate-700">${d.vendor_name || '-'}</td> <td class="px-6 py-4">
+					<td class="px-6 py-4">
 						<div class="text-sm font-medium">${d.defect_type || 'Lỗi chưa xác định'}</div>
 						<span class="text-[10px] px-2 py-0.5 rounded-full border font-bold ${getSevClass(d.severity)}">${d.severity || 'Medium'}</span>
 					</td>
@@ -1079,15 +2156,11 @@
         }
 
 		function renderHistory() {
-			const query = (historySearch?.value || '').toLowerCase().trim();
-
-			const historyData = defectsData.filter(d => {
-				if (d.status !== 'Resolved') return false;
-
-				const searchStr = `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''}`.toLowerCase();
-
-				return searchStr.includes(query);
-			});
+			let historyData = getSearchFilteredRows('history');
+            historyData = applyTableFilters(historyData, 'history');
+			historyData = applyTableSort(historyData, 'history');
+			updateSortIndicators('history');
+            updateFilterIndicators('history');
 
 			historyList.innerHTML = historyData.map(d => `
 				<tr class="hover:bg-slate-50 group">
@@ -1183,20 +2256,20 @@
 		}
 
         function renderCatalog() {
-			const query = (catalogSearch?.value || '').toLowerCase().trim();
-
-			const filteredCatalog = catalogData.filter(c => {
-				const searchStr = `${c.barcode || ''} ${c.product_name || ''} ${c.sku || ''} ${c.vendor_name || ''} ${c.vendor_id || ''}`.toLowerCase();
-				return searchStr.includes(query);
-			});
+			let filteredCatalog = getSearchFilteredRows('catalog');
+            filteredCatalog = applyTableFilters(filteredCatalog, 'catalog');
+			filteredCatalog = applyTableSort(filteredCatalog, 'catalog');
+			updateSortIndicators('catalog');
+            updateFilterIndicators('catalog');
 
 			catalogList.innerHTML = filteredCatalog.map(c => `
 				<tr class="hover:bg-slate-50 transition-colors">
 					<td class="px-6 py-4 font-mono text-blue-600 text-sm font-bold">${c.barcode}</td>
 					<td class="px-6 py-4 font-medium">${c.product_name}</td>
 					<td class="px-6 py-4 font-mono text-xs">${c.sku}</td>
+					<td class="px-6 py-4 text-sm text-slate-700">${c.vendor_name || '-'}</td>
 					<td class="px-6 py-4 text-sm font-mono text-slate-600">${c.vendor_id || '-'}</td>
-					<td class="px-6 py-4 text-sm text-slate-700">${c.vendor_name || '-'}</td> <td class="px-6 py-4 text-right">
+					<td class="px-6 py-4 text-right">
 						<!-- <button onclick="deleteItem('catalog', '${c.id}')" class="text-red-300 hover:text-red-600 p-2">
 							<i class="fas fa-times"></i>
 						</button> -->
@@ -1268,7 +2341,7 @@
 					// Lấy thông tin record để có image_url
 					const { data: item, error: fetchError } = await supabaseClient
 						.from('defects')
-						.select('image_url')
+						.select('*')
 						.eq('id', id)
 						.single();
 
@@ -1299,6 +2372,8 @@
 					.eq('id', id);
 
 				if (deleteError) throw deleteError;
+
+				await createActivityLog('delete', table, id, `Xóa dữ liệu trong bảng ${table}`, { id });
 
 				alert("Đã xóa dữ liệu thành công!");
 
@@ -1355,9 +2430,16 @@
 					image_url: imageUrl // Thêm URL ảnh vào dữ liệu lưu trữ
 				};
 
-				const { error } = await supabaseClient.from('defects').insert([payload]);
+				const { data: insertedDefect, error } = await supabaseClient
+					.from('defects')
+					.insert([payload])
+					.select()
+					.single();
 				
 				if (error) throw error;
+
+				await createNotification('defect_created', insertedDefect || payload);
+				await createActivityLog('create', 'defects', (insertedDefect || payload).id, `Thêm báo lỗi mới: ${(insertedDefect || payload).product_name || '-'}`, { sku: (insertedDefect || payload).sku, barcode: (insertedDefect || payload).barcode, vendor_id: (insertedDefect || payload).vendor_id, quantity: (insertedDefect || payload).quantity, status: (insertedDefect || payload).status });
 
 				// Thành công: Reset form và đóng modal
 				toggleModal('modal-defect', false);
@@ -1386,8 +2468,13 @@
         document.getElementById('catalog-form').onsubmit = async (e) => {
             e.preventDefault();
             const formData = Object.fromEntries(new FormData(e.target));
-            const { error } = await supabaseClient.from('catalog').insert([formData]);
+            const { data: insertedCatalog, error } = await supabaseClient
+                .from('catalog')
+                .insert([formData])
+                .select()
+                .single();
             if (!error) {
+                await createActivityLog('create', 'catalog', (insertedCatalog || formData).id, `Thêm danh mục: ${(insertedCatalog || formData).product_name || '-'}`, { sku: (insertedCatalog || formData).sku, barcode: (insertedCatalog || formData).barcode, vendor_id: (insertedCatalog || formData).vendor_id });
                 toggleModal('modal-catalog', false);
                 e.target.reset();
             } else {
@@ -1418,7 +2505,10 @@
 
                 const { error } = await supabaseClient.from('catalog').insert(rows);
                 if (error) alert("Lỗi khi nhập liệu: " + error.message);
-                else alert(`Đã nhập thành công ${rows.length} sản phẩm.`);
+                else {
+                    await createActivityLog('import', 'catalog', null, `Nhập Excel danh mục: ${rows.length} sản phẩm`, { count: rows.length });
+                    alert(`Đã nhập thành công ${rows.length} sản phẩm.`);
+                }
             };
             reader.readAsBinaryString(file);
             e.target.value = ''; 
@@ -1468,6 +2558,11 @@
 					alert("Lỗi khi nhập báo lỗi: " + error.message);
 				} else {
 					alert(`Đã nhập thành công ${rows.length} dòng báo lỗi.`);
+					await createNotification('defect_created', {
+						product_name: `Nhập Excel ${rows.length} dòng báo lỗi`,
+						sku: '',
+						barcode: ''
+					});
 					await fetchDefects();
 				}
 			};
@@ -1493,6 +2588,16 @@
 
         window.switchTab = (tab) => {
 
+			const toggleHidden = (id, hidden) => {
+				const el = document.getElementById(id);
+				if (el) el.classList.toggle('hidden', hidden);
+			};
+
+			const toggleClass = (id, className, enabled) => {
+				const el = document.getElementById(id);
+				if (el) el.classList.toggle(className, enabled);
+			};
+
 			if (tab === 'catalog' && !canManageData()) {
 				alert("Bạn không có quyền truy cập danh mục hàng hóa.");
 				tab = 'dashboard';
@@ -1503,50 +2608,41 @@
 				tab = 'dashboard';
 			}
 
+			if (tab === 'logs' && !isAdmin()) {
+				alert("Chỉ admin mới được xem nhật ký hoạt động.");
+				tab = 'dashboard';
+			}
+
 			// views
-			document.getElementById('view-dashboard')
-				.classList.toggle('hidden', tab !== 'dashboard');
-
-			document.getElementById('view-history')
-				.classList.toggle('hidden', tab !== 'history');
-
-			document.getElementById('view-catalog')
-				.classList.toggle('hidden', tab !== 'catalog');
-
-			document.getElementById('view-users')
-				.classList.toggle('hidden', tab !== 'users');
+			toggleHidden('view-dashboard', tab !== 'dashboard');
+			toggleHidden('view-history', tab !== 'history');
+			toggleHidden('view-catalog', tab !== 'catalog');
+			toggleHidden('view-users', tab !== 'users');
+			toggleHidden('view-logs', tab !== 'logs');
 
 			// tabs active
-			document.getElementById('tab-dashboard')
-				.classList.toggle('tab-active', tab === 'dashboard');
-
-			document.getElementById('tab-history')
-				.classList.toggle('tab-active', tab === 'history');
-
-			document.getElementById('tab-catalog')
-				.classList.toggle('tab-active', tab === 'catalog');
-
-			document.getElementById('tab-users')
-				.classList.toggle('tab-active', tab === 'users');
+			toggleClass('tab-dashboard', 'tab-active', tab === 'dashboard');
+			toggleClass('tab-history', 'tab-active', tab === 'history');
+			toggleClass('tab-catalog', 'tab-active', tab === 'catalog');
+			toggleClass('tab-users', 'tab-active', tab === 'users');
+			toggleClass('tab-logs', 'tab-active', tab === 'logs');
 
 			// text colors
-			document.getElementById('tab-dashboard')
-				.classList.toggle('text-slate-500', tab !== 'dashboard');
-
-			document.getElementById('tab-history')
-				.classList.toggle('text-slate-500', tab !== 'history');
-
-			document.getElementById('tab-catalog')
-				.classList.toggle('text-slate-500', tab !== 'catalog');
-
-			document.getElementById('tab-users')
-				.classList.toggle('text-slate-500', tab !== 'users');
+			toggleClass('tab-dashboard', 'text-slate-500', tab !== 'dashboard');
+			toggleClass('tab-history', 'text-slate-500', tab !== 'history');
+			toggleClass('tab-catalog', 'text-slate-500', tab !== 'catalog');
+			toggleClass('tab-users', 'text-slate-500', tab !== 'users');
+			toggleClass('tab-logs', 'text-slate-500', tab !== 'logs');
 				
 			if (tab === 'users') {
 				fetchUsers();
 			}
+
+			if (tab === 'logs') {
+				fetchActivityLogs();
+			}
 			
-			['dashboard', 'history', 'catalog', 'users'].forEach(name => {
+			['dashboard', 'history', 'catalog', 'users', 'logs'].forEach(name => {
 				const el = document.getElementById(`m-tab-${name}`);
 				if (!el) return;
 
@@ -1635,6 +2731,8 @@
 		catalogSearch?.addEventListener('input', renderCatalog);
 		historySearch?.addEventListener('input', renderHistory);
 		usersSearch?.addEventListener('input', renderUsers);
+		logsSearch?.addEventListener('input', renderActivityLogs);
+		document.getElementById('logs-action-filter')?.addEventListener('change', renderActivityLogs);
         
         document.getElementById('auto-barcode').oninput = async (e) => {
 			const val = e.target.value.trim();
@@ -1700,14 +2798,24 @@
 				   ' ' + date.toLocaleDateString('vi-VN');
 		}
 
+
+		function getVisibleRowsForExport(tableName) {
+			let rows = getSearchFilteredRows(tableName);
+			rows = applyTableFilters(rows, tableName);
+			rows = applyTableSort([...rows], tableName);
+			return rows;
+		}
+
 		function exportDefectsToExcel() {
-			if (defectsData.length === 0) {
-				alert("Không có dữ liệu để xuất!");
+			const visibleRows = getVisibleRowsForExport('dashboard');
+
+			if (visibleRows.length === 0) {
+				alert("Không có dữ liệu phù hợp với bộ lọc hiện tại để xuất!");
 				return;
 			}
 
-			// 1. Chuẩn bị dữ liệu để xuất (chọn lọc và đặt tên cột tiếng Việt)
-			const dataToExport = defectsData.map(d => ({
+			// Xuất đúng dữ liệu đang hiển thị sau khi tìm kiếm + lọc tiêu đề giống Excel
+			const dataToExport = visibleRows.map(d => ({
 				"Thời gian": new Date(d.created_at).toLocaleString('vi-VN'),
 				"Barcode": d.barcode || '',
 				"Tên sản phẩm": d.product_name || '',
@@ -1740,18 +2848,10 @@
 		}
 
 		function exportHistoryToExcel() {
-			const query = (historySearch?.value || '').toLowerCase().trim();
-
-			const historyData = defectsData.filter(d => {
-				if (d.status !== 'Resolved') return false;
-
-				const searchStr = `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''}`.toLowerCase();
-
-				return searchStr.includes(query);
-			});
+			const historyData = getVisibleRowsForExport('history');
 
 			if (historyData.length === 0) {
-				alert("Chưa có dữ liệu lịch sử để xuất!");
+				alert("Không có dữ liệu lịch sử phù hợp với bộ lọc hiện tại để xuất!");
 				return;
 			}
 
@@ -1834,12 +2934,17 @@
 			document.getElementById('login-screen').classList.add('hidden');
 			applyPermissionUI();
 			await fetchUsers();
+			if (isAdmin()) await fetchActivityLogs();
+			await fetchNotifications();
+			await createActivityLog('login', 'session', null, `${currentDisplayName} đăng nhập hệ thống`, { mode, username });
 			renderDashboard();
 			renderHistory();
 		}
 
 		async function logoutApp() {
 			const mode = localStorage.getItem('loginMode');
+
+			await createActivityLog('logout', 'session', null, `${currentDisplayName || 'Người dùng'} đăng xuất hệ thống`, { mode });
 
 			if (mode === 'auth') {
 				await supabaseClient.auth.signOut();
@@ -1882,6 +2987,8 @@
 					document.getElementById('login-screen').classList.add('hidden');
 					applyPermissionUI();
 					await fetchUsers();
+					if (isAdmin()) await fetchActivityLogs();
+					await fetchNotifications();
 					renderDashboard();
 					renderHistory();
 					return;
@@ -1901,6 +3008,8 @@
 				document.getElementById('login-screen').classList.add('hidden');
 				applyPermissionUI();
 				await fetchUsers();
+				if (isAdmin()) await fetchActivityLogs();
+				await fetchNotifications();
 				renderDashboard();
 				renderHistory();
 			} else {
@@ -1943,14 +3052,24 @@
 
 			if (!id) return;
 
-			const { error } = await supabaseClient
+			const currentDefect = defectsData.find(d => d.id == id) || {};
+
+			const { data: updatedDefect, error } = await supabaseClient
 				.from('defects')
 				.update({ status })
-				.eq('id', id);
+				.eq('id', id)
+				.select()
+				.single();
 
 			if (error) {
 				alert("Lỗi cập nhật trạng thái: " + error.message);
 				return;
+			}
+
+			await createActivityLog('update', 'defects', id, `Cập nhật trạng thái hàng lỗi: ${updatedDefect?.product_name || currentDefect.product_name || '-'}`, { old_status: currentDefect.status, new_status: status, sku: updatedDefect?.sku || currentDefect.sku, barcode: updatedDefect?.barcode || currentDefect.barcode });
+
+			if (status === 'Resolved' && currentDefect.status !== 'Resolved') {
+				await createNotification('defect_resolved', updatedDefect || currentDefect, { status });
 			}
 
 			toggleModal('modal-status', false);
@@ -1996,10 +3115,13 @@
 
 			const query = (usersSearch?.value || '').toLowerCase().trim();
 
-			const filteredUsers = appUsers.filter(u => {
+			let filteredUsers = appUsers.filter(u => {
 				const searchStr = `${u.username || ''} ${u.full_name || ''} ${u.role || ''} ${u.active ? 'hoạt động active' : 'đã khóa inactive'}`.toLowerCase();
 				return searchStr.includes(query);
 			});
+
+			filteredUsers = applyTableSort(filteredUsers, 'users');
+			updateSortIndicators('users');
 
 			usersList.innerHTML = filteredUsers.map(u => `
 
@@ -2171,8 +3293,32 @@
 			await fetchUsers();
 		};
 
+        enhanceExcelFilters();
         init();
 		checkLogin();
+    
+
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+
+        function updateScrollTopButton() {
+            const btn = document.getElementById('scroll-top-btn');
+            if (!btn) return;
+
+            if (window.scrollY > 260) {
+                btn.classList.add('show');
+            } else {
+                btn.classList.remove('show');
+            }
+        }
+
+        window.addEventListener('scroll', updateScrollTopButton, { passive: true });
+        window.addEventListener('load', updateScrollTopButton);
+
     </script>
 </body>
 </html>
