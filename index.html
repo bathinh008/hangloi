@@ -128,6 +128,55 @@
             }
         }
 
+
+
+        /* Mobile floating action: Báo lỗi mới */
+        #mobile-new-defect-btn {
+            position: fixed;
+            right: 18px;
+            bottom: 86px;
+            z-index: 89;
+            min-width: 58px;
+            height: 58px;
+            border-radius: 999px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0 18px;
+            box-shadow: 0 14px 30px rgba(37, 99, 235, 0.35);
+        }
+
+        #mobile-new-defect-btn i {
+            font-size: 18px;
+        }
+
+        #mobile-new-defect-btn .mobile-fab-text {
+            display: none;
+            font-size: 13px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 768px) {
+            #mobile-new-defect-btn {
+                display: inline-flex;
+            }
+
+            #scroll-top-btn {
+                bottom: 154px;
+            }
+        }
+
+        @media (max-width: 390px) {
+            #mobile-new-defect-btn {
+                width: 54px;
+                min-width: 54px;
+                height: 54px;
+                padding: 0;
+            }
+        }
+
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen pb-20 md:pb-0">
@@ -336,7 +385,7 @@
 					</button>
 
 					<button onclick="resetTableFilters('dashboard')"
-						class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg flex items-center gap-2 border border-slate-200 transition-colors">
+						class="hidden md:flex bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg items-center gap-2 border border-slate-200 transition-colors">
 						<i class="fas fa-rotate-left text-blue-600"></i> Reset lọc
 					</button>
 
@@ -501,9 +550,15 @@
 				</button>
 
 				<button onclick="resetTableFilters('history')"
-					class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg flex items-center gap-2 border border-slate-200 transition-colors whitespace-nowrap">
+					class="hidden md:flex bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg items-center gap-2 border border-slate-200 transition-colors whitespace-nowrap">
 					<i class="fas fa-rotate-left text-blue-600"></i>
 					Reset lọc
+				</button>
+
+				<button onclick="deleteAllHistoryDefects()"
+					class="admin-only bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors whitespace-nowrap">
+					<i class="fas fa-trash-alt"></i>
+					Xóa lịch sử
 				</button>
 			</div>
 
@@ -532,6 +587,7 @@
 							<th class="sortable-th px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('history', 'status')">
 								<button type="button" class="flex items-center gap-2 text-left uppercase tracking-wider">Kết quả <i id="sort-history-status" class="fas fa-sort text-slate-300"></i></button>
 							</th>
+							<th class="admin-only px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Xóa</th>
 						</tr>
 					</thead>
 					<tbody id="history-list" class="divide-y divide-slate-100"></tbody>
@@ -1004,6 +1060,17 @@
 	</div>
 
 
+
+
+    <!-- Nút nổi mobile: Báo lỗi mới -->
+    <button id="mobile-new-defect-btn"
+        onclick="toggleModal('modal-defect', true)"
+        class="bg-blue-600 hover:bg-blue-700 text-white md:hidden"
+        title="Báo lỗi mới"
+        aria-label="Báo lỗi mới">
+        <i class="fas fa-plus"></i>
+        <span class="mobile-fab-text">Báo lỗi</span>
+    </button>
 
     <!-- Nút lên đầu trang -->
     <button id="scroll-top-btn"
@@ -2240,6 +2307,16 @@
 							${getStatusText(d.status)}
 						</span>
 					</td>
+
+					${isAdmin() ? `
+						<td class="px-6 py-4 text-right">
+							<button onclick="event.stopPropagation(); deleteHistoryItem('${d.id}')"
+								class="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-xl transition-colors"
+								title="Chỉ xóa mục đã nằm trong lịch sử">
+								<i class="fas fa-trash"></i>
+							</button>
+						</td>
+					` : ''}
 				</tr>
 			`).join('');
 
@@ -2283,10 +2360,17 @@
 						<div class="font-medium text-sm text-slate-700">${d.defect_type || 'Lỗi chưa xác định'}</div>
 					</div>
 
-					<div class="mt-3">
+					<div class="mt-3 flex items-center justify-between gap-2">
 						<span class="text-xs rounded-full border px-3 py-1 font-bold ${getStatusClass(d.status)}">
 							${getStatusText(d.status)}
 						</span>
+
+						${isAdmin() ? `
+							<button onclick="event.stopPropagation(); deleteHistoryItem('${d.id}')"
+								class="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-xl transition-colors">
+								<i class="fas fa-trash"></i>
+							</button>
+						` : ''}
 					</div>
 				</div>
 			`).join('');
@@ -2369,6 +2453,139 @@
             await supabaseClient.from('defects').update({ status }).eq('id', id);
         }
 
+        function getDefectStoragePath(imageUrl) {
+            if (!imageUrl) return null;
+
+            try {
+                const url = new URL(imageUrl);
+                const marker = '/defect-images/';
+                const markerIndex = url.pathname.indexOf(marker);
+
+                if (markerIndex !== -1) {
+                    return decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+                }
+
+                const parts = url.pathname.split('/').filter(Boolean);
+                const fileName = parts[parts.length - 1];
+                return fileName ? `defects/${decodeURIComponent(fileName)}` : null;
+            } catch (e) {
+                const cleanUrl = String(imageUrl).split('?')[0];
+                const fileName = cleanUrl.split('/').pop();
+                return fileName ? `defects/${fileName}` : null;
+            }
+        }
+
+        async function removeDefectImageFromStorage(imageUrl) {
+            const filePath = getDefectStoragePath(imageUrl);
+            if (!filePath) return;
+
+            const { error } = await supabaseClient.storage
+                .from('defect-images')
+                .remove([filePath]);
+
+            if (error) {
+                console.error('Lỗi xóa ảnh Storage:', error.message);
+            }
+        }
+
+        async function deleteHistoryItem(id) {
+            if (!isAdmin()) {
+                alert('Chỉ admin mới được xóa lịch sử.');
+                return;
+            }
+
+            const item = defectsData.find(d => String(d.id) === String(id));
+            if (!item) {
+                alert('Không tìm thấy dữ liệu cần xóa.');
+                return;
+            }
+
+            if (item.status !== 'Resolved') {
+                alert('Chỉ được xóa những mục đã chuyển qua tab Lịch sử (trạng thái Xong).');
+                return;
+            }
+
+            if (!confirm('Xác nhận xóa mục lịch sử này? Thao tác này sẽ xóa cả hình ảnh đính kèm nếu có.')) return;
+
+            try {
+                await removeDefectImageFromStorage(item.image_url);
+
+                const { error } = await supabaseClient
+                    .from('defects')
+                    .delete()
+                    .eq('id', id)
+                    .eq('status', 'Resolved');
+
+                if (error) throw error;
+
+                await createActivityLog('delete', 'defects', id, 'Xóa 1 mục trong tab lịch sử', {
+                    product_name: item.product_name,
+                    sku: item.sku,
+                    barcode: item.barcode,
+                    status: item.status
+                });
+
+                alert('Đã xóa mục lịch sử thành công.');
+                await fetchDefects();
+            } catch (error) {
+                console.error('Lỗi khi xóa lịch sử:', error);
+                alert('Có lỗi xảy ra khi xóa lịch sử: ' + error.message);
+            }
+        }
+
+        async function deleteAllHistoryDefects() {
+            if (!isAdmin()) {
+                alert('Chỉ admin mới được xóa lịch sử.');
+                return;
+            }
+
+            const historyItems = defectsData.filter(d => d.status === 'Resolved');
+
+            if (historyItems.length === 0) {
+                alert('Không có dữ liệu lịch sử để xóa.');
+                return;
+            }
+
+            if (!confirm(`Bạn chắc chắn muốn xóa ${historyItems.length} mục đã nằm trong tab Lịch sử?`)) return;
+            if (!confirm('Xác nhận lần cuối: thao tác này không thể hoàn tác và sẽ xóa cả ảnh đính kèm nếu có.')) return;
+
+            try {
+                const imagePaths = [...new Set(
+                    historyItems
+                        .map(d => getDefectStoragePath(d.image_url))
+                        .filter(Boolean)
+                )];
+
+                if (imagePaths.length > 0) {
+                    const { error: storageError } = await supabaseClient.storage
+                        .from('defect-images')
+                        .remove(imagePaths);
+
+                    if (storageError) {
+                        console.error('Lỗi xóa ảnh lịch sử Storage:', storageError.message);
+                    }
+                }
+
+                const { error } = await supabaseClient
+                    .from('defects')
+                    .delete()
+                    .eq('status', 'Resolved');
+
+                if (error) throw error;
+
+                await createActivityLog('delete', 'defects', null, 'Xóa toàn bộ dữ liệu trong tab lịch sử', {
+                    count: historyItems.length,
+                    image_count: imagePaths.length
+                });
+
+                alert('Đã xóa toàn bộ dữ liệu trong tab lịch sử.');
+                await fetchDefects();
+            } catch (error) {
+                console.error('Lỗi khi xóa toàn bộ lịch sử:', error);
+                alert('Có lỗi xảy ra khi xóa lịch sử: ' + error.message);
+            }
+        }
+
         async function deleteItem(table, id) {
 			if (!confirm("Xác nhận xóa dữ liệu này? Thao tác này sẽ xóa cả hình ảnh đính kèm (nếu có).")) return;
 
@@ -2386,19 +2603,7 @@
 
 					// Nếu có ảnh, thực hiện xóa trong Storage
 					if (item && item.image_url) {
-						// Tách tên file từ URL (Ví dụ: từ .../defects/0.123.jpg lấy ra defects/0.123.jpg)
-						const urlParts = item.image_url.split('/');
-						const fileName = urlParts[urlParts.length - 1];
-						const filePath = `defects/${fileName}`;
-
-						const { error: storageError } = await supabaseClient.storage
-							.from('defect-images')
-							.remove([filePath]);
-
-						if (storageError) {
-							console.error("Lỗi xóa ảnh Storage:", storageError.message);
-							// Bạn có thể quyết định dừng lại hoặc vẫn cho xóa data record tùy nhu cầu
-						}
+						await removeDefectImageFromStorage(item.image_url);
 					}
 				}
 
