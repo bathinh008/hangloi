@@ -923,7 +923,7 @@
 				</div>
 				<div class="space-y-2">
 					<label class="block text-sm font-medium text-slate-700">Hình ảnh sản phẩm lỗi</label>
-					<input type="file" id="f-image" accept="image/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+					<input type="file" id="f-image" accept="image/*" required class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
 					<img id="image-preview" class="hidden mt-2 w-full h-32 object-cover rounded-lg border">
 				</div>
                 <div class="grid grid-cols-2 gap-4">
@@ -2910,11 +2910,27 @@
         document.getElementById('defect-form').onsubmit = async (e) => {
 			e.preventDefault();
 			const submitBtn = e.target.querySelector('button[type="submit"]');
-			const imageFile = document.getElementById('f-image').files[0];
+			const imageInput = document.getElementById('f-image');
+			const imageFile = imageInput?.files?.[0];
+			const defectTypeInput = e.target.querySelector('[name="defect_type"]');
+			const defectType = cleanTextValue(defectTypeInput?.value);
 			let imageUrl = null;
 
+			// Điều kiện bắt buộc: phải có mô tả lỗi và hình ảnh mới được lưu báo cáo.
+			if (!defectType) {
+				alert('Vui lòng nhập Mô tả lỗi trước khi lưu báo cáo.');
+				defectTypeInput?.focus();
+				return;
+			}
+
+			if (!imageFile) {
+				alert('Vui lòng chọn Hình ảnh sản phẩm lỗi trước khi lưu báo cáo.');
+				imageInput?.focus();
+				return;
+			}
+
 			try {
-				showAppLoading('Đang lưu báo cáo lỗi...', imageFile ? 'Đang nén ảnh và gửi dữ liệu lên Supabase' : 'Đang gửi dữ liệu lên Supabase');
+				showAppLoading('Đang lưu báo cáo lỗi...', 'Đang nén ảnh và gửi dữ liệu lên Supabase');
 				submitBtn.disabled = true;
 				submitBtn.innerText = "Đang xử lý...";
 
@@ -2958,7 +2974,7 @@
 						sku: cleanTextValue(formData.sku),
 						vendor_name: supplier.vendor_name,
 						vendor_id: supplier.vendor_id,
-						defect_type: cleanTextValue(formData.defect_type),
+						defect_type: defectType,
 						quantity: Number(formData.quantity || 1),
 						severity: cleanTextValue(formData.severity || 'Medium'),
 						status: cleanTextValue(formData.status || 'Pending'),
@@ -2998,6 +3014,9 @@
 			if (file) {
 				preview.src = URL.createObjectURL(file);
 				preview.classList.remove('hidden');
+			} else {
+				preview.removeAttribute('src');
+				preview.classList.add('hidden');
 			}
 		};
 
