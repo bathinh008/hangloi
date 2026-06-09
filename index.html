@@ -168,6 +168,10 @@
             }
         }
 
+        body.modal-open #mobile-new-defect-btn {
+            display: none !important;
+        }
+
         @media (max-width: 390px) {
             #mobile-new-defect-btn {
                 width: 54px;
@@ -177,9 +181,175 @@
             }
         }
 
+
+
+        /* Premium loading overlay */
+        #app-loading-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 22px;
+            background:
+                radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 34%),
+                radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.20), transparent 32%),
+                rgba(15, 23, 42, 0.42);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+
+        #app-loading-overlay.show {
+            display: flex;
+        }
+
+        .premium-loader-card {
+            width: min(92vw, 360px);
+            border: 1px solid rgba(255, 255, 255, 0.55);
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: 0 28px 70px rgba(15, 23, 42, 0.26);
+            border-radius: 28px;
+            padding: 28px 24px;
+            text-align: center;
+            transform: translateY(8px) scale(0.98);
+            animation: loaderPop .22s ease-out forwards;
+        }
+
+        @keyframes loaderPop {
+            to { transform: translateY(0) scale(1); }
+        }
+
+        .premium-loader-logo {
+            width: 74px;
+            height: 74px;
+            margin: 0 auto 18px;
+            border-radius: 24px;
+            display: grid;
+            place-items: center;
+            color: white;
+            background: linear-gradient(135deg, #2563eb, #06b6d4, #10b981);
+            box-shadow: 0 18px 35px rgba(37, 99, 235, 0.28);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .premium-loader-logo::before {
+            content: '';
+            position: absolute;
+            inset: -42%;
+            border: 3px solid rgba(255, 255, 255, 0.42);
+            border-top-color: rgba(255, 255, 255, 0.95);
+            border-radius: 999px;
+            animation: loaderSpin 1s linear infinite;
+        }
+
+        .premium-loader-logo i {
+            position: relative;
+            z-index: 1;
+            font-size: 28px;
+        }
+
+        @keyframes loaderSpin {
+            to { transform: rotate(360deg); }
+        }
+
+        #app-loading-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 6px;
+        }
+
+        #app-loading-subtitle {
+            font-size: 13px;
+            color: #64748b;
+            line-height: 1.45;
+            min-height: 18px;
+        }
+
+        .premium-loader-bar {
+            height: 8px;
+            margin-top: 20px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: #e2e8f0;
+        }
+
+        .premium-loader-bar span {
+            display: block;
+            height: 100%;
+            width: 45%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #2563eb, #06b6d4, #10b981);
+            animation: loaderBar 1.25s ease-in-out infinite;
+        }
+
+        @keyframes loaderBar {
+            0% { transform: translateX(-115%); }
+            55% { transform: translateX(95%); }
+            100% { transform: translateX(235%); }
+        }
+
+        .premium-loader-dots {
+            display: inline-flex;
+            gap: 5px;
+            margin-top: 16px;
+        }
+
+        .premium-loader-dots span {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: #2563eb;
+            opacity: 0.35;
+            animation: loaderDots 1s ease-in-out infinite;
+        }
+
+        .premium-loader-dots span:nth-child(2) { animation-delay: .15s; }
+        .premium-loader-dots span:nth-child(3) { animation-delay: .3s; }
+
+        @keyframes loaderDots {
+            0%, 100% { opacity: .28; transform: translateY(0); }
+            50% { opacity: 1; transform: translateY(-4px); }
+        }
+
+        .btn-loading {
+            pointer-events: none;
+            opacity: .78;
+            position: relative;
+        }
+
+        .btn-loading::after {
+            content: '';
+            width: 15px;
+            height: 15px;
+            margin-left: 8px;
+            border: 2px solid rgba(255, 255, 255, .65);
+            border-top-color: #fff;
+            border-radius: 999px;
+            display: inline-block;
+            vertical-align: -2px;
+            animation: loaderSpin .75s linear infinite;
+        }
+
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen pb-20 md:pb-0">
+
+    <!-- Loading overlay giống web app hiện đại -->
+    <div id="app-loading-overlay" aria-live="polite" aria-busy="true">
+        <div class="premium-loader-card">
+            <div class="premium-loader-logo">
+                <i class="fas fa-box-open"></i>
+            </div>
+            <div id="app-loading-title">Đang tải dữ liệu...</div>
+            <div id="app-loading-subtitle">Vui lòng chờ trong giây lát</div>
+            <div class="premium-loader-bar"><span></span></div>
+            <div class="premium-loader-dots"><span></span><span></span><span></span></div>
+        </div>
+    </div>
+
 
 	<!--Đăng nhập-->
 	<div id="login-screen" class="fixed inset-0 bg-slate-100 z-[999] flex items-center justify-center">
@@ -1103,6 +1273,7 @@
 		let currentDisplayName = 'Người dùng';
 		let notificationsData = [];
 		let notificationChannelReady = false;
+		let notificationChannel = null;
 		let activityLogsData = [];
 		let activityLogChannelReady = false;
 
@@ -1119,6 +1290,62 @@
 		const logsSearch = document.getElementById('logs-search');
 		
 		let appUsers = [];
+		let notificationPollingTimer = null;
+		let dataPollingTimer = null;
+
+        let appLoadingCount = 0;
+
+        function showAppLoading(title = 'Đang tải dữ liệu...', subtitle = 'Vui lòng chờ trong giây lát') {
+            appLoadingCount++;
+            const overlay = document.getElementById('app-loading-overlay');
+            const titleEl = document.getElementById('app-loading-title');
+            const subtitleEl = document.getElementById('app-loading-subtitle');
+
+            if (titleEl) titleEl.innerText = title;
+            if (subtitleEl) subtitleEl.innerText = subtitle;
+            if (overlay) overlay.classList.add('show');
+        }
+
+        function updateAppLoading(title, subtitle) {
+            const titleEl = document.getElementById('app-loading-title');
+            const subtitleEl = document.getElementById('app-loading-subtitle');
+            if (titleEl && title) titleEl.innerText = title;
+            if (subtitleEl && subtitle) subtitleEl.innerText = subtitle;
+        }
+
+        function hideAppLoading(force = false) {
+            if (force) appLoadingCount = 0;
+            else appLoadingCount = Math.max(0, appLoadingCount - 1);
+
+            if (appLoadingCount === 0) {
+                const overlay = document.getElementById('app-loading-overlay');
+                if (overlay) overlay.classList.remove('show');
+            }
+        }
+
+        async function withAppLoading(title, subtitle, task) {
+            showAppLoading(title, subtitle);
+            try {
+                return await task();
+            } finally {
+                hideAppLoading();
+            }
+        }
+
+        function setButtonLoading(button, isLoading, text) {
+            if (!button) return;
+            if (isLoading) {
+                button.dataset.oldText = button.innerText;
+                button.disabled = true;
+                button.innerText = text || 'Đang xử lý';
+                button.classList.add('btn-loading');
+            } else {
+                button.disabled = false;
+                button.innerText = button.dataset.oldText || button.innerText;
+                button.classList.remove('btn-loading');
+            }
+        }
+
 
 		async function fetchUsers() {
 
@@ -1212,40 +1439,16 @@
 				return;
 			}
 			updateStatusUI('connecting');
+			showAppLoading('Đang kết nối hệ thống...', 'Đang tải báo cáo lỗi và danh mục');
 			
-			// Tải dữ liệu lần đầu
-			await Promise.all([fetchDefects(), fetchCatalog(), fetchNotifications()]);
-			updateStatusUI('online');
-
-			// Thiết lập Realtime cho bảng Defects
-			supabaseClient
-				.channel('realtime-defects')
-				.on('postgres_changes', { 
-					event: '*', 
-					schema: 'public', 
-					table: 'defects' 
-				}, (payload) => {
-					console.log('Có thay đổi tại bảng Defects:', payload);
-					fetchDefects(); // Tải lại danh sách khi có biến động (Thêm/Sửa/Xóa)
-				})
-				.subscribe();
-
-			// Thiết lập Realtime cho bảng Catalog
-			supabaseClient
-				.channel('realtime-catalog')
-				.on('postgres_changes', { 
-					event: '*', 
-					schema: 'public', 
-					table: 'catalog' 
-				}, (payload) => {
-					console.log('Có thay đổi tại bảng Catalog:', payload);
-					fetchCatalog(); // Tải lại danh mục
-				})
-				.subscribe();
-
-			// Thiết lập Realtime cho bảng Notifications
-			setupNotificationRealtime();
-			setupActivityLogRealtime();
+			try {
+				// Chỉ tải dữ liệu công khai ban đầu. Thông báo sẽ tải sau khi đăng nhập xong
+				// để tránh Auth/Anon bị lệch quyền và tránh lỗi WebSocket.
+				await Promise.all([fetchDefects(), fetchCatalog()]);
+				updateStatusUI('online');
+			} finally {
+				hideAppLoading(true);
+			}
 		}
 
         async function fetchDefects() {
@@ -1297,8 +1500,8 @@
             return getReadNotificationIds().includes(String(id));
         }
 
-        async function fetchNotifications() {
-            if (!supabaseClient) return;
+        async function fetchNotifications(showErrorInPanel = true) {
+            if (!supabaseClient || !currentUser) return;
 
             try {
                 const { data, error } = await supabaseClient
@@ -1308,34 +1511,74 @@
                     .limit(100);
 
                 if (error) {
-                    console.warn('Chưa đọc được bảng notifications:', error.message);
+                    console.warn('Chưa đọc được bảng notifications:', error.message, error);
                     notificationsData = [];
                     renderNotifications();
+                    if (showErrorInPanel) showNotificationReadError(error);
                     return;
                 }
 
                 notificationsData = data || [];
                 renderNotifications();
             } catch (error) {
-                console.warn('Lỗi tải thông báo:', error.message);
+                console.warn('Lỗi tải thông báo:', error.message, error);
+                notificationsData = [];
+                renderNotifications();
+                if (showErrorInPanel) showNotificationReadError(error);
             }
         }
 
-        function setupNotificationRealtime() {
-            if (notificationChannelReady || !supabaseClient) return;
+        function showNotificationReadError(error) {
+            const list = document.getElementById('notification-list');
+            const countText = document.getElementById('notification-count-text');
+            const badge = document.getElementById('notification-badge');
+            if (countText) countText.innerText = 'Không đọc được thông báo';
+            if (badge) {
+                badge.classList.add('hidden');
+                badge.classList.remove('flex');
+            }
+            if (!list) return;
+            list.innerHTML = `
+                <div class="p-4 bg-red-50 text-red-700 text-sm leading-relaxed">
+                    <div class="font-bold mb-1">Tài khoản này chưa đọc được bảng notifications.</div>
+                    <div>${escapeHtml(error?.message || 'Lỗi không xác định')}</div>
+                    <div class="mt-2 text-xs text-red-500">Thường do RLS policy của Supabase chưa cấp quyền SELECT cho role authenticated.</div>
+                </div>
+            `;
+        }
 
-            notificationChannelReady = true;
+        function stopAutoRefresh() {
+            if (notificationPollingTimer) clearInterval(notificationPollingTimer);
+            if (dataPollingTimer) clearInterval(dataPollingTimer);
+            notificationPollingTimer = null;
+            dataPollingTimer = null;
+        }
 
-            supabaseClient
-                .channel('realtime-notifications')
-                .on('postgres_changes', {
-                    event: '*',
-                    schema: 'public',
-                    table: 'notifications'
-                }, () => {
-                    fetchNotifications();
-                })
-                .subscribe();
+        function startAutoRefresh() {
+            stopAutoRefresh();
+
+            // Không dùng Supabase Realtime WebSocket nữa vì trình duyệt/mạng đang đóng WS trước khi kết nối.
+            // Dùng polling để tài khoản app_users và Supabase Authentication đều cập nhật ổn định.
+            notificationPollingTimer = setInterval(() => {
+                if (currentUser) fetchNotifications(false);
+            }, 10000);
+
+            dataPollingTimer = setInterval(() => {
+                if (!currentUser) return;
+                fetchDefects();
+                fetchCatalog();
+                if (isAdmin()) fetchActivityLogs();
+            }, 20000);
+        }
+
+        async function setupNotificationRealtime() {
+            // Đã tắt realtime notifications để tránh lỗi WebSocket closed before connection is established.
+            return;
+        }
+
+        async function refreshNotificationsAfterLogin() {
+            await fetchNotifications(true);
+            startAutoRefresh();
         }
 
 
@@ -1392,19 +1635,8 @@
         }
 
         function setupActivityLogRealtime() {
-            if (activityLogChannelReady || !supabaseClient) return;
-            activityLogChannelReady = true;
-
-            supabaseClient
-                .channel('realtime-activity-logs')
-                .on('postgres_changes', {
-                    event: '*',
-                    schema: 'public',
-                    table: 'activity_logs'
-                }, () => {
-                    if (isAdmin()) fetchActivityLogs();
-                })
-                .subscribe();
+            // Đã tắt realtime activity_logs để tránh lỗi WebSocket.
+            return;
         }
 
         function getLogActionText(action) {
@@ -2632,6 +2864,7 @@
 			let imageUrl = null;
 
 			try {
+				showAppLoading('Đang lưu báo cáo lỗi...', imageFile ? 'Đang nén ảnh và gửi dữ liệu lên Supabase' : 'Đang gửi dữ liệu lên Supabase');
 				submitBtn.disabled = true;
 				submitBtn.innerText = "Đang xử lý...";
 
@@ -2692,6 +2925,7 @@
 			} catch (error) {
 				alert("Lỗi: " + error.message);
 			} finally {
+				hideAppLoading(true);
 				submitBtn.disabled = false;
 				submitBtn.innerText = "Lưu báo cáo";
 			}
@@ -2710,17 +2944,22 @@
         document.getElementById('catalog-form').onsubmit = async (e) => {
             e.preventDefault();
             const formData = Object.fromEntries(new FormData(e.target));
-            const { data: insertedCatalog, error } = await supabaseClient
-                .from('catalog')
-                .insert([formData])
-                .select()
-                .single();
-            if (!error) {
-                await createActivityLog('create', 'catalog', (insertedCatalog || formData).id, `Thêm danh mục: ${(insertedCatalog || formData).product_name || '-'}`, { sku: (insertedCatalog || formData).sku, barcode: (insertedCatalog || formData).barcode, vendor_id: (insertedCatalog || formData).vendor_id });
-                toggleModal('modal-catalog', false);
-                e.target.reset();
-            } else {
-                alert("Lỗi khi lưu danh mục (Kiểm tra tên cột DB): " + error.message);
+            showAppLoading('Đang lưu danh mục...', 'Đang kiểm tra và thêm sản phẩm vào Supabase');
+            try {
+                const { data: insertedCatalog, error } = await supabaseClient
+                    .from('catalog')
+                    .insert([formData])
+                    .select()
+                    .single();
+                if (!error) {
+                    await createActivityLog('create', 'catalog', (insertedCatalog || formData).id, `Thêm danh mục: ${(insertedCatalog || formData).product_name || '-'}`, { sku: (insertedCatalog || formData).sku, barcode: (insertedCatalog || formData).barcode, vendor_id: (insertedCatalog || formData).vendor_id });
+                    toggleModal('modal-catalog', false);
+                    e.target.reset();
+                } else {
+                    alert("Lỗi khi lưu danh mục (Kiểm tra tên cột DB): " + error.message);
+                }
+            } finally {
+                hideAppLoading(true);
             }
         };
 
@@ -2729,6 +2968,8 @@
             if (!file) return;
             const reader = new FileReader();
             reader.onload = async (evt) => {
+                showAppLoading('Đang nhập danh mục...', 'Đang đọc Excel và lưu dữ liệu');
+                try {
                 const workbook = XLSX.read(evt.target.result, { type: 'binary' });
                 const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                 
@@ -2751,6 +2992,9 @@
                     await createActivityLog('import', 'catalog', null, `Nhập Excel danh mục: ${rows.length} sản phẩm`, { count: rows.length });
                     alert(`Đã nhập thành công ${rows.length} sản phẩm.`);
                 }
+                } finally {
+                    hideAppLoading(true);
+                }
             };
             reader.readAsBinaryString(file);
             e.target.value = ''; 
@@ -2763,6 +3007,8 @@
 			const reader = new FileReader();
 
 			reader.onload = async (evt) => {
+				showAppLoading('Đang nhập báo cáo lỗi...', 'Đang đọc Excel và lưu danh sách báo lỗi');
+				try {
 				const workbook = XLSX.read(evt.target.result, { type: 'binary' });
 				const sheet = workbook.Sheets[workbook.SheetNames[0]];
 				const json = XLSX.utils.sheet_to_json(sheet);
@@ -2806,6 +3052,9 @@
 						barcode: ''
 					});
 					await fetchDefects();
+				}
+				} finally {
+					hideAppLoading(true);
 				}
 			};
 
@@ -2897,7 +3146,17 @@
 		};
 
         window.toggleModal = (id, show) => {
-            document.getElementById(id).classList.toggle('hidden', !show);
+            const modal = document.getElementById(id);
+            if (!modal) return;
+
+            modal.classList.toggle('hidden', !show);
+
+            // Khi mở form/modal trên mobile thì ẩn nút nổi dấu cộng,
+            // tránh nút còn đè lên bảng nhập thông tin.
+            const hasOpenModal = Array.from(document.querySelectorAll('[id^=\"modal-\"]'))
+                .some(el => !el.classList.contains('hidden'));
+
+            document.body.classList.toggle('modal-open', hasOpenModal);
         };
 
         window.downloadSampleExcel = () => {
@@ -3238,64 +3497,71 @@
 
 			document.getElementById('login-error').classList.add('hidden');
 
-			if (mode === 'auth') {
-				const { data, error } = await supabaseClient.auth.signInWithPassword({
-					email: username,
-					password
-				});
-
-				if (error) {
-					document.getElementById('login-error').innerText = error.message;
-					document.getElementById('login-error').classList.remove('hidden');
-					return;
-				}
-
-				currentUser = data.user;
-				await loadUserRole();
-				currentDisplayName =
-					data.user.email || 'Quản trị';
-
-				updateHelloUser();
-
-				localStorage.setItem('loginMode', 'auth');
+			if (!username || !password) {
+				document.getElementById('login-error').innerText = 'Vui lòng nhập tài khoản và mật khẩu';
+				document.getElementById('login-error').classList.remove('hidden');
+				return;
 			}
 
-			if (mode === 'app_user') {
-				const { data, error } = await supabaseClient.rpc('login_app_user', {
-					p_username: username,
-					p_password: password
-				});
+			showAppLoading('Đang đăng nhập...', 'Đang kiểm tra tài khoản và phân quyền');
 
-				if (error || !data || data.length === 0) {
-					document.getElementById('login-error').innerText = 'Sai tài khoản hoặc mật khẩu';
-					document.getElementById('login-error').classList.remove('hidden');
-					return;
+			try {
+				if (mode === 'auth') {
+					const { data, error } = await supabaseClient.auth.signInWithPassword({
+						email: username,
+						password
+					});
+
+					if (error) {
+						document.getElementById('login-error').innerText = error.message;
+						document.getElementById('login-error').classList.remove('hidden');
+						return;
+					}
+
+					currentUser = data.user;
+					await loadUserRole();
+					currentDisplayName = data.user.email || 'Quản trị';
+					updateHelloUser();
+					localStorage.setItem('loginMode', 'auth');
 				}
 
-				const user = data[0];
+				if (mode === 'app_user') {
+					const { data, error } = await supabaseClient.rpc('login_app_user', {
+						p_username: username,
+						p_password: password
+					});
 
-				currentUser = user;
-				currentRole = user.role || 'staff';
-				currentDisplayName =
-					user.full_name || user.username || 'Nhân viên';
+					if (error || !data || data.length === 0) {
+						document.getElementById('login-error').innerText = 'Sai tài khoản hoặc mật khẩu';
+						document.getElementById('login-error').classList.remove('hidden');
+						return;
+					}
 
-				updateHelloUser();
+					const user = data[0];
+					currentUser = user;
+					currentRole = user.role || 'staff';
+					currentDisplayName = user.full_name || user.username || 'Nhân viên';
+					updateHelloUser();
+					localStorage.setItem('loginMode', 'app_user');
+					localStorage.setItem('appUser', JSON.stringify(user));
+				}
 
-				localStorage.setItem('loginMode', 'app_user');
-				localStorage.setItem('appUser', JSON.stringify(user));
+				updateAppLoading('Đang mở giao diện...', 'Đang tải dữ liệu theo quyền tài khoản');
+				document.getElementById('login-screen').classList.add('hidden');
+				applyPermissionUI();
+				await fetchUsers();
+				if (isAdmin()) await fetchActivityLogs();
+				await refreshNotificationsAfterLogin();
+				await createActivityLog('login', 'session', null, `${currentDisplayName} đăng nhập hệ thống`, { mode, username });
+				renderDashboard();
+				renderHistory();
+			} finally {
+				hideAppLoading(true);
 			}
-
-			document.getElementById('login-screen').classList.add('hidden');
-			applyPermissionUI();
-			await fetchUsers();
-			if (isAdmin()) await fetchActivityLogs();
-			await fetchNotifications();
-			await createActivityLog('login', 'session', null, `${currentDisplayName} đăng nhập hệ thống`, { mode, username });
-			renderDashboard();
-			renderHistory();
 		}
 
 		async function logoutApp() {
+			stopAutoRefresh();
 			const mode = localStorage.getItem('loginMode');
 
 			await createActivityLog('logout', 'session', null, `${currentDisplayName || 'Người dùng'} đăng xuất hệ thống`, { mode });
@@ -3325,49 +3591,50 @@
 		}
 
 		async function checkLogin() {
-			const mode = localStorage.getItem('loginMode');
+			showAppLoading('Đang kiểm tra phiên đăng nhập...', 'Đang khôi phục phiên làm việc nếu có');
+			try {
+				const mode = localStorage.getItem('loginMode');
 
-			if (mode === 'app_user') {
-				const savedUser = localStorage.getItem('appUser');
+				if (mode === 'app_user') {
+					const savedUser = localStorage.getItem('appUser');
 
-				if (savedUser) {
-					currentUser = JSON.parse(savedUser);
-					currentRole = currentUser.role || 'staff';
-					currentDisplayName =
-						currentUser.full_name || currentUser.username || 'Nhân viên';
+					if (savedUser) {
+						currentUser = JSON.parse(savedUser);
+						currentRole = currentUser.role || 'staff';
+						currentDisplayName = currentUser.full_name || currentUser.username || 'Nhân viên';
+
+						updateHelloUser();
+						document.getElementById('login-screen').classList.add('hidden');
+						applyPermissionUI();
+						await fetchUsers();
+						if (isAdmin()) await fetchActivityLogs();
+						await refreshNotificationsAfterLogin();
+						renderDashboard();
+						renderHistory();
+						return;
+					}
+				}
+
+				const { data } = await supabaseClient.auth.getSession();
+
+				if (data.session) {
+					currentUser = data.session.user;
+					await loadUserRole();
+					currentDisplayName = currentUser.email || 'Quản trị';
 
 					updateHelloUser();
-
 					document.getElementById('login-screen').classList.add('hidden');
 					applyPermissionUI();
 					await fetchUsers();
 					if (isAdmin()) await fetchActivityLogs();
-					await fetchNotifications();
+					await refreshNotificationsAfterLogin();
 					renderDashboard();
 					renderHistory();
-					return;
+				} else {
+					document.getElementById('login-screen').classList.remove('hidden');
 				}
-			}
-
-			const { data } = await supabaseClient.auth.getSession();
-
-			if (data.session) {
-				currentUser = data.session.user;
-				await loadUserRole();
-				currentDisplayName =
-					currentUser.email || 'Quản trị';
-
-				updateHelloUser();
-
-				document.getElementById('login-screen').classList.add('hidden');
-				applyPermissionUI();
-				await fetchUsers();
-				if (isAdmin()) await fetchActivityLogs();
-				await fetchNotifications();
-				renderDashboard();
-				renderHistory();
-			} else {
-				document.getElementById('login-screen').classList.remove('hidden');
+			} finally {
+				hideAppLoading(true);
 			}
 		}
 
