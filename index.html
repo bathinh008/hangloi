@@ -1542,7 +1542,7 @@
                 <div class="p-4 bg-red-50 text-red-700 text-sm leading-relaxed">
                     <div class="font-bold mb-1">Tài khoản này chưa đọc được bảng notifications.</div>
                     <div>${escapeHtml(error?.message || 'Lỗi không xác định')}</div>
-                    <div class="mt-2 text-xs text-red-500">Thường do RLS policy của Supabase chưa cấp quyền SELECT cho role authenticated.</div>
+                    <div class="mt-2 text-xs text-red-500">Thường do RLS policy của Supabase chưa cấp quyền SELECT cho role authenticated. Hãy chạy lại SQL tạo bảng/policy ở phần hướng dẫn.</div>
                 </div>
             `;
         }
@@ -3665,14 +3665,23 @@
 		async function loadUserRole() {
 			if (!currentUser) return;
 
-			const { data, error } = await supabaseClient
-				.from('profiles')
-				.select('role')
-				.eq('id', currentUser.id)
-				.single();
+			// Tài khoản đăng nhập bằng Supabase Auth là tài khoản quản trị.
+			// Nếu bảng profiles chưa có dòng role cho user này thì vẫn cho quyền admin,
+			// tránh bị mặc định staff làm ẩn tab quản trị/thông báo.
+			currentRole = 'admin';
 
-			if (!error && data) {
-				currentRole = data.role || 'staff';
+			try {
+				const { data, error } = await supabaseClient
+					.from('profiles')
+					.select('role')
+					.eq('id', currentUser.id)
+					.maybeSingle();
+
+				if (!error && data && data.role) {
+					currentRole = data.role;
+				}
+			} catch (error) {
+				console.warn('Không đọc được profiles, giữ quyền admin cho tài khoản Auth:', error.message);
 			}
 		}
 
