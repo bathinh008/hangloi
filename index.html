@@ -2857,6 +2857,56 @@
 			}
 		}
 
+
+
+		function cleanTextValue(value) {
+			if (value === null || value === undefined) return '';
+			return String(value).trim();
+		}
+
+		function pickFirstValue(source, keys) {
+			for (const key of keys) {
+				if (source && source[key] !== undefined && source[key] !== null && String(source[key]).trim() !== '') {
+					return String(source[key]).trim();
+				}
+			}
+			return '';
+		}
+
+		function looksLikeVendorCode(value) {
+			const v = cleanTextValue(value);
+			if (!v) return false;
+			// Mã NCC thường là số/ngắn hoặc dạng NCC-01, NCC001, SUP001...
+			return /^[A-Z0-9._\-\/]{1,30}$/i.test(v) && !/\s/.test(v);
+		}
+
+		function looksLikeVendorName(value) {
+			const v = cleanTextValue(value);
+			if (!v) return false;
+			return /\s/.test(v) || /công ty|cong ty|tnhh|cp|cổ phần|co\.ltd|company|npp|nhà cung cấp|nha cung cap/i.test(v);
+		}
+
+		function normalizeSupplierFields(source = {}) {
+			let vendorName = pickFirstValue(source, [
+				'vendor_name', 'vendorName', 'VendorName', 'vendor', 'supplier_name', 'SupplierName',
+				'Tên NCC', 'Tên nhà cung cấp', 'Ten NCC', 'Ten nha cung cap', 'Nhà cung cấp', 'Nha cung cap'
+			]);
+			let vendorId = pickFirstValue(source, [
+				'vendor_id', 'vendorId', 'VendorId', 'supplier_id', 'SupplierId', 'supplier_code', 'SupplierCode',
+				'Mã NCC', 'Mã nhà cung cấp', 'Ma NCC', 'Ma nha cung cap', 'Mã Ncc', 'Ma Ncc'
+			]);
+
+			// Chống trường hợp file Excel hoặc dữ liệu cũ bị đảo cột: mã nằm ở ô tên, tên nằm ở ô mã.
+			if (looksLikeVendorCode(vendorName) && looksLikeVendorName(vendorId)) {
+				[vendorName, vendorId] = [vendorId, vendorName];
+			}
+
+			return {
+				vendor_name: vendorName,
+				vendor_id: vendorId
+			};
+		}
+
         document.getElementById('defect-form').onsubmit = async (e) => {
 			e.preventDefault();
 			const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -2899,11 +2949,21 @@
 				}
 
 				// 2. Lưu dữ liệu vào Table 'defects'
-				const formData = Object.fromEntries(new FormData(e.target));
-				const payload = {
-					...formData,
-					image_url: imageUrl // Thêm URL ảnh vào dữ liệu lưu trữ
-				};
+				// Tạo payload rõ ràng để tránh sai cột Mã NCC / Tên NCC khi lưu database.
+					const formData = Object.fromEntries(new FormData(e.target));
+					const supplier = normalizeSupplierFields(formData);
+					const payload = {
+						barcode: cleanTextValue(formData.barcode || document.getElementById('auto-barcode')?.value),
+						product_name: cleanTextValue(formData.product_name),
+						sku: cleanTextValue(formData.sku),
+						vendor_name: supplier.vendor_name,
+						vendor_id: supplier.vendor_id,
+						defect_type: cleanTextValue(formData.defect_type),
+						quantity: Number(formData.quantity || 1),
+						severity: cleanTextValue(formData.severity || 'Medium'),
+						status: cleanTextValue(formData.status || 'Pending'),
+						image_url: imageUrl
+					};
 
 				const { data: insertedDefect, error } = await supabaseClient
 					.from('defects')
@@ -2944,15 +3004,23 @@
         document.getElementById('catalog-form').onsubmit = async (e) => {
             e.preventDefault();
             const formData = Object.fromEntries(new FormData(e.target));
-            showAppLoading('Đang lưu danh mục...', 'Đang kiểm tra và thêm sản phẩm vào Supabase');
-            try {
-                const { data: insertedCatalog, error } = await supabaseClient
-                    .from('catalog')
-                    .insert([formData])
+	            const supplier = normalizeSupplierFields(formData);
+	            const payload = {
+	                barcode: cleanTextValue(formData.barcode),
+	                product_name: cleanTextValue(formData.product_name),
+	                sku: cleanTextValue(formData.sku),
+	                vendor_name: supplier.vendor_name,
+	                vendor_id: supplier.vendor_id
+	            };
+	            showAppLoading('Đang lưu danh mục...', 'Đang kiểm tra và thêm sản phẩm vào Supabase');
+	            try {
+	                const { data: insertedCatalog, error } = await supabaseClient
+	                    .from('catalog')
+	                    .insert([payload])
                     .select()
                     .single();
                 if (!error) {
-                    await createActivityLog('create', 'catalog', (insertedCatalog || formData).id, `Thêm danh mục: ${(insertedCatalog || formData).product_name || '-'}`, { sku: (insertedCatalog || formData).sku, barcode: (insertedCatalog || formData).barcode, vendor_id: (insertedCatalog || formData).vendor_id });
+                    await createActivityLog('create', 'catalog', (insertedCatalog || payload).id, `Thêm danh mục: ${(insertedCatalog || payload).product_name || '-'}`, { sku: (insertedCatalog || payload).sku, barcode: (insertedCatalog || payload).barcode, vendor_id: (insertedCatalog || payload).vendor_id });
                     toggleModal('modal-catalog', false);
                     e.target.reset();
                 } else {
@@ -2974,11 +3042,10 @@
                 const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                 
                 const rows = json.map(row => ({
-                    barcode: String(row.Mahang || row.Barcode || ""),
-                    product_name: row.Tenhang || row.ProductName || "",
-                    sku: row.MaSanPham || row.SKU || "",
-                    vendor_name: row.VendorName || "",
-                    vendor_id: String(row.VendorId || "")
+                    barcode: String(row.Mahang || row.Barcode || row["Mã vạch"] || "").trim(),
+                    product_name: cleanTextValue(row.Tenhang || row.ProductName || row["Tên sản phẩm"] || row["Tên hàng"]),
+                    sku: cleanTextValue(row.MaSanPham || row.SKU || row["Item"]),
+                    ...normalizeSupplierFields(row)
                 })).filter(r => r.barcode && r.product_name);
 
                 if (rows.length === 0) {
@@ -3022,10 +3089,9 @@
 
 					return {
 						barcode: String(row["Barcode"] || row["Mã vạch"] || "").trim(),
-						product_name: row["Tên sản phẩm"] || row.ProductName || "",
-						sku: String(row["SKU"] || row["Item"] || "").trim(),
-						vendor_name: row["Tên NCC"] || row["Tên nhà cung cấp"] || "",
-						vendor_id: String(row["Mã NCC"] || row["Mã nhà cung cấp"] || "").trim(),
+						product_name: cleanTextValue(row["Tên sản phẩm"] || row.ProductName || row.Tenhang),
+						sku: String(row["SKU"] || row["Item"] || row.MaSanPham || "").trim(),
+						...normalizeSupplierFields(row),
 						defect_type: row["Mô tả lỗi"] || row["Loại lỗi"] || "",
 						quantity: Number(row["Số lượng"] || row.Quantity || 1),
 						severity: row["Mức độ"] || row.Severity || "Medium",
@@ -3378,11 +3444,12 @@
 
 			// 3. Hiển thị kết quả
 			if (found) {
-				document.getElementById('f-product_name').value = found.product_name;
-				document.getElementById('f-sku').value = found.sku;
-				document.getElementById('f-vendor_name').value = found.vendor_name || '';
-				document.getElementById('f-vendor_id').value = found.vendor_id || '';
-				document.getElementById('f-barcode').value = found.barcode;
+					const supplier = normalizeSupplierFields(found);
+					document.getElementById('f-product_name').value = found.product_name || '';
+					document.getElementById('f-sku').value = found.sku || '';
+					document.getElementById('f-vendor_name').value = supplier.vendor_name;
+					document.getElementById('f-vendor_id').value = supplier.vendor_id;
+					document.getElementById('f-barcode').value = found.barcode || val;
 				
 				statusMsg.innerText = "✓ Đã tìm thấy thông tin!";
 				statusMsg.classList.remove('hidden', 'text-slate-400');
