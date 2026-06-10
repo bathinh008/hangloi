@@ -1221,6 +1221,19 @@
 				</div>
 			</div>
 
+			<div class="px-4 py-3 border-b border-slate-100 bg-slate-50">
+				<div class="flex items-center justify-between gap-3">
+					<div>
+						<div class="text-sm font-bold text-slate-700">Thông báo điện thoại</div>
+						<div id="push-status-text" class="text-xs text-slate-500 mt-0.5">Chưa bật Web Push</div>
+					</div>
+					<button onclick="enablePhonePushNotifications()"
+						id="enable-push-btn"
+						class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl font-bold whitespace-nowrap">
+						Bật thông báo
+					</button>
+				</div>
+			</div>
 			<div id="notification-list" class="max-h-[70vh] overflow-y-auto divide-y divide-slate-100">
 				<div class="p-6 text-center text-slate-400 text-sm">
 					Chưa có thông báo
@@ -1228,6 +1241,13 @@
 			</div>
 		</div>
 	</div>
+
+
+
+
+    <!-- Popup nổi: thông báo hàng lỗi mới -->
+    <div id="notification-toast-container"
+        class="fixed top-20 right-4 left-4 md:left-auto z-[9999] space-y-3 pointer-events-none"></div>
 
 
 
@@ -1255,6 +1275,8 @@
         
         const SUPABASE_URL = "https://fgujuuybphirvaebfgel.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZndWp1dXlicGhpcnZhZWJmZ2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwODEwNTAsImV4cCI6MjA4NjY1NzA1MH0.JJTnpEMvmOIUqCXFIJKx0yHCCNhmHc_wiMszw9UwkcI"; // Dán Anon Key của bạn vào đây
+        // Web Push: thay bằng VAPID public key của bạn sau khi tạo bằng lệnh: npx web-push generate-vapid-keys
+        const VAPID_PUBLIC_KEY = "BEvFCZMFzzESBkCKG1mMhgMl4u1z98Wy206w3-cbCTPRZopA-izDDdXcxW5091fCZz2lkOON8200tWKKOogwlWw";
         
         let supabaseClient;
         try {
@@ -1500,6 +1522,305 @@
             return getReadNotificationIds().includes(String(id));
         }
 
+        function getNotificationSeenKey() {
+            return `notification_seen_${getCurrentAccountKey()}`;
+        }
+
+        function getSeenNotificationIds() {
+            try {
+                return JSON.parse(localStorage.getItem(getNotificationSeenKey()) || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function setSeenNotificationIds(ids) {
+            localStorage.setItem(
+                getNotificationSeenKey(),
+                JSON.stringify([...new Set(ids.map(String))])
+            );
+        }
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        function isPushConfigured() {
+            return !!VAPID_PUBLIC_KEY && !VAPID_PUBLIC_KEY.includes('THAY_');
+        }
+
+        async function getServiceWorkerRegistration() {
+            if (!('serviceWorker' in navigator)) {
+                throw new Error('Trình duyệt này chưa hỗ trợ Service Worker.');
+            }
+            return await navigator.serviceWorker.register('../service-worker.js');
+        }
+
+        async function savePushSubscription(subscription) {
+            if (!subscription || !supabaseClient || !currentUser) return;
+
+            const json = subscription.toJSON();
+            const accountKey = getCurrentAccountKey();
+
+            const payload = {
+                endpoint: json.endpoint,
+                p256dh: json.keys?.p256dh || '',
+                auth: json.keys?.auth || '',
+                user_key: accountKey,
+                username: currentUser.username || currentUser.email || currentUser.id || '',
+                display_name: currentDisplayName || '',
+                user_role: currentRole || 'staff',
+                user_agent: navigator.userAgent || '',
+                active: true,
+                updated_at: new Date().toISOString()
+            };
+
+            const { error } = await supabaseClient
+                .from('push_subscriptions')
+                .upsert(payload, { onConflict: 'endpoint' });
+
+            if (error) throw error;
+        }
+
+        async function syncExistingPushSubscription() {
+            try {
+                if (!isPushConfigured() || Notification.permission !== 'granted') return;
+                const registration = await getServiceWorkerRegistration();
+                const existing = await registration.pushManager.getSubscription();
+                if (existing) await savePushSubscription(existing);
+                updatePushStatusUI();
+            } catch (error) {
+                console.warn('Không đồng bộ được push subscription:', error.message);
+            }
+        }
+
+        async function enablePhonePushNotifications() {
+            try {
+                if (!window.isSecureContext) {
+                    alert('Web Push cần chạy bằng HTTPS hoặc localhost. Hãy upload web lên hosting HTTPS trước.');
+                    return;
+                }
+
+                if (!('Notification' in window) || !('PushManager' in window)) {
+                    alert('Trình duyệt này chưa hỗ trợ Web Push Notification. Nên dùng Chrome/Edge Android hoặc PWA trên iOS 16.4+.');
+                    return;
+                }
+
+                if (!isPushConfigured()) {
+                    alert('Bạn chưa điền VAPID_PUBLIC_KEY trong file hang-loi/index.html. Hãy tạo khóa VAPID rồi thay vào trước.');
+                    return;
+                }
+
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    updatePushStatusUI();
+                    alert('Bạn chưa cấp quyền thông báo cho web/app.');
+                    return;
+                }
+
+                const registration = await getServiceWorkerRegistration();
+                let subscription = await registration.pushManager.getSubscription();
+
+                if (!subscription) {
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                    });
+                }
+
+                await savePushSubscription(subscription);
+                updatePushStatusUI('Đã bật thông báo điện thoại cho thiết bị này');
+
+                registration.showNotification('Đã bật thông báo', {
+                    body: 'Thiết bị này sẽ nhận thông báo khi có hàng lỗi mới.',
+                    icon: '/icons/icon-192.png',
+                    badge: '/icons/icon-192.png',
+                    data: { url: '/hang-loi/' }
+                });
+            } catch (error) {
+                console.warn('Lỗi bật Web Push:', error);
+                updatePushStatusUI('Lỗi bật thông báo: ' + error.message);
+                alert('Lỗi bật thông báo: ' + error.message);
+            }
+        }
+
+        function updatePushStatusUI(customText) {
+            const statusEl = document.getElementById('push-status-text');
+            const btn = document.getElementById('enable-push-btn');
+            if (!statusEl || !btn) return;
+
+            if (!('Notification' in window) || !('PushManager' in window)) {
+                statusEl.innerText = 'Thiết bị/trình duyệt chưa hỗ trợ Web Push';
+                btn.disabled = true;
+                btn.classList.add('opacity-60');
+                return;
+            }
+
+            if (customText) {
+                statusEl.innerText = customText;
+                return;
+            }
+
+            if (!isPushConfigured()) {
+                statusEl.innerText = 'Chưa cấu hình VAPID key';
+                return;
+            }
+
+            if (Notification.permission === 'granted') {
+                statusEl.innerText = 'Đã cấp quyền thông báo';
+                btn.innerText = 'Bật lại';
+            } else if (Notification.permission === 'denied') {
+                statusEl.innerText = 'Đang bị chặn thông báo trong trình duyệt';
+            } else {
+                statusEl.innerText = 'Chưa bật thông báo trên thiết bị này';
+            }
+        }
+
+        async function sendWebPushForNotification(notification) {
+            if (!notification || notification.type !== 'defect_created') return;
+
+            try {
+                const { error } = await supabaseClient.functions.invoke('send-push', {
+                    body: {
+                        notification_id: notification.id,
+                        title: notification.title || 'Có hàng lỗi mới',
+                        body: notification.message || `${notification.product_name || 'Sản phẩm'} vừa được báo lỗi`,
+                        url: '/hang-loi/',
+                        type: notification.type,
+                        product_name: notification.product_name || '',
+                        sku: notification.sku || '',
+                        barcode: notification.barcode || '',
+                        defect_id: notification.defect_id || null
+                    }
+                });
+
+                if (error) console.warn('Chưa gửi được Web Push:', error.message);
+            } catch (error) {
+                console.warn('Edge Function send-push chưa sẵn sàng hoặc bị lỗi:', error.message);
+            }
+        }
+
+        function playNotificationBeep() {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+
+                const ctx = new AudioCtx();
+                const oscillator = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+                gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.22);
+
+                oscillator.connect(gain);
+                gain.connect(ctx.destination);
+                oscillator.start();
+                oscillator.stop(ctx.currentTime + 0.24);
+
+                setTimeout(() => ctx.close?.(), 350);
+            } catch (e) {
+                console.warn('Không phát được âm báo:', e.message);
+            }
+        }
+
+        function showNewDefectToast(n) {
+            const container = document.getElementById('notification-toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'pointer-events-auto ml-auto w-full md:w-[360px] bg-white border border-blue-100 shadow-2xl rounded-2xl p-4 animate-in cursor-pointer';
+
+            toast.innerHTML = `
+                <div class="flex gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="font-extrabold text-slate-800 leading-snug">
+                                ${escapeHtml(n.title || 'Có hàng lỗi mới')}
+                            </div>
+                            <button type="button" class="text-slate-400 hover:text-red-500 shrink-0 px-1">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="text-sm text-slate-600 mt-1 leading-relaxed">
+                            ${escapeHtml(n.product_name || 'Sản phẩm mới được báo lỗi')}
+                            ${n.sku ? `<span class="font-mono text-blue-600"> - ITEM: ${escapeHtml(n.sku)}</span>` : ''}
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1">
+                            ${escapeHtml(n.actor_name || n.actor_username || 'Người dùng')} vừa tạo báo cáo lỗi
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            toast.onclick = () => {
+                markNotificationRead(n.id);
+                toggleNotificationsPanel();
+                toast.remove();
+            };
+
+            const closeBtn = toast.querySelector('button');
+            if (closeBtn) {
+                closeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    toast.remove();
+                };
+            }
+
+            container.appendChild(toast);
+
+            if (navigator.vibrate) {
+                navigator.vibrate([180, 80, 180]);
+            }
+
+            playNotificationBeep();
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-8px)';
+                toast.style.transition = 'all .2s ease';
+                setTimeout(() => toast.remove(), 220);
+            }, 8000);
+        }
+
+        function checkAndShowNewNotificationToasts(newData) {
+            if (!Array.isArray(newData) || !currentUser) return;
+
+            const seenIds = getSeenNotificationIds();
+
+            // Lần đầu đăng nhập/chạy app: đánh dấu đã thấy để không bung lại hàng loạt thông báo cũ.
+            if (seenIds.length === 0) {
+                setSeenNotificationIds(newData.map(n => n.id).filter(Boolean));
+                return;
+            }
+
+            const newItems = newData
+                .filter(n => n && n.id && !seenIds.includes(String(n.id)))
+                .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+
+            if (newItems.length === 0) return;
+
+            const updatedSeenIds = [...seenIds, ...newItems.map(n => String(n.id))];
+            setSeenNotificationIds(updatedSeenIds);
+
+            newItems
+                .filter(n => n.type === 'defect_created')
+                .slice(-3)
+                .forEach(n => showNewDefectToast(n));
+        }
+
         async function fetchNotifications(showErrorInPanel = true) {
             if (!supabaseClient || !currentUser) return;
 
@@ -1518,7 +1839,9 @@
                     return;
                 }
 
-                notificationsData = data || [];
+                const freshNotifications = data || [];
+                checkAndShowNewNotificationToasts(freshNotifications);
+                notificationsData = freshNotifications;
                 renderNotifications();
             } catch (error) {
                 console.warn('Lỗi tải thông báo:', error.message, error);
@@ -1578,6 +1901,8 @@
 
         async function refreshNotificationsAfterLogin() {
             await fetchNotifications(true);
+            updatePushStatusUI();
+            await syncExistingPushSubscription();
             startAutoRefresh();
         }
 
@@ -1867,7 +2192,7 @@
             }
 
             try {
-                const { error } = await supabaseClient
+                const { data: insertedNotification, error } = await supabaseClient
                     .from('notifications')
                     .insert([{
                         type,
@@ -1880,13 +2205,16 @@
                         barcode: defect.barcode || '',
                         defect_id: defect.id || null,
                         status: extra.status || defect.status || null
-                    }]);
+                    }])
+                    .select()
+                    .single();
 
                 if (error) {
                     console.warn('Không tạo được thông báo:', error.message);
                     return;
                 }
 
+                await sendWebPushForNotification(insertedNotification);
                 await fetchNotifications();
             } catch (error) {
                 console.warn('Lỗi tạo thông báo:', error.message);
@@ -2147,7 +2475,8 @@
                 <input type="text"
                     placeholder="Tìm trong danh sách lọc..."
                     class="w-full mb-2 px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    oninput="filterExcelMenuOptions(this)">
+                    oninput="filterExcelMenuOptions(this)"
+                    onkeydown="handleExcelFilterEnter(event, '${tableName}', '${key}')">
 
                 <label class="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-50 text-sm font-semibold text-slate-700 border-b border-slate-100 mb-1">
                     <input type="checkbox" class="excel-select-all" ${isAllChecked ? 'checked' : ''} onchange="toggleExcelSelectAll(this)">
@@ -2172,6 +2501,23 @@
             menu.classList.remove('hidden');
         }
 
+        function getVisibleExcelFilterBoxes(menu) {
+            return [...menu.querySelectorAll('.excel-filter-option')]
+                .filter(option => option.style.display !== 'none')
+                .map(option => option.querySelector('.excel-filter-checkbox'))
+                .filter(Boolean);
+        }
+
+        function updateExcelSelectAllState(menu) {
+            if (!menu) return;
+            const visibleBoxes = getVisibleExcelFilterBoxes(menu);
+            const selectAll = menu.querySelector('.excel-select-all');
+            if (selectAll) {
+                selectAll.checked = visibleBoxes.length > 0 && visibleBoxes.every(item => item.checked);
+                selectAll.indeterminate = visibleBoxes.some(item => item.checked) && !selectAll.checked;
+            }
+        }
+
         function filterExcelMenuOptions(input) {
             const query = input.value.toLowerCase().trim();
             const menu = input.closest('.excel-filter-menu');
@@ -2179,22 +2525,44 @@
 
             menu.querySelectorAll('.excel-filter-option').forEach(option => {
                 const text = option.innerText.toLowerCase();
-                option.style.display = text.includes(query) ? 'flex' : 'none';
+                const matched = !query || text.includes(query);
+                option.style.display = matched ? 'flex' : 'none';
+
+                // Giống Excel: khi nhập từ khóa lọc, chỉ giữ tick các kết quả đang hiện.
+                // Các dòng bị ẩn sẽ bỏ tick để bấm "Áp dụng" không còn hiểu là Select All.
+                const box = option.querySelector('.excel-filter-checkbox');
+                if (box && query) box.checked = matched;
             });
+
+            updateExcelSelectAllState(menu);
+        }
+
+        function handleExcelFilterEnter(event, tableName, key) {
+            if (event.key !== 'Enter') return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            applyExcelFilter(tableName, key);
         }
 
         function toggleExcelSelectAll(checkbox) {
             const menu = checkbox.closest('.excel-filter-menu');
             if (!menu) return;
-            menu.querySelectorAll('.excel-filter-checkbox').forEach(item => item.checked = checkbox.checked);
+
+            // Nếu đang gõ tìm trong menu lọc thì Select All chỉ áp dụng cho các dòng đang hiện.
+            const searchQuery = menu.querySelector('input[type="text"]')?.value.trim() || '';
+            const boxes = searchQuery
+                ? getVisibleExcelFilterBoxes(menu)
+                : [...menu.querySelectorAll('.excel-filter-checkbox')];
+
+            boxes.forEach(item => item.checked = checkbox.checked);
+            updateExcelSelectAllState(menu);
         }
 
         function syncExcelSelectAll(checkbox) {
             const menu = checkbox.closest('.excel-filter-menu');
             if (!menu) return;
-            const boxes = [...menu.querySelectorAll('.excel-filter-checkbox')];
-            const selectAll = menu.querySelector('.excel-select-all');
-            if (selectAll) selectAll.checked = boxes.length > 0 && boxes.every(item => item.checked);
+            updateExcelSelectAllState(menu);
         }
 
         function applyExcelFilter(tableName, key) {
@@ -2202,11 +2570,15 @@
             if (!menu) return;
 
             const allValues = getFilterValues(tableName, key);
-            const checkedValues = [...menu.querySelectorAll('.excel-filter-checkbox:checked')].map(item => item.value);
+            const searchQuery = menu.querySelector('input[type="text"]')?.value.trim() || '';
+            const checkedBoxes = searchQuery
+                ? getVisibleExcelFilterBoxes(menu).filter(item => item.checked)
+                : [...menu.querySelectorAll('.excel-filter-checkbox:checked')];
+            const checkedValues = checkedBoxes.map(item => item.value);
 
             if (checkedValues.length === 0) {
                 tableFilterState[tableName][key] = ['__NO_MATCH__'];
-            } else if (checkedValues.length === allValues.length) {
+            } else if (!searchQuery && checkedValues.length === allValues.length) {
                 delete tableFilterState[tableName][key];
             } else {
                 tableFilterState[tableName][key] = checkedValues;
